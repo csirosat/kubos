@@ -1,4 +1,3 @@
-//
 // Copyright (C) 2018 Kubos Corporation
 //
 // Licensed under the Apache License, Version 2.0 (the "License")
@@ -16,20 +15,13 @@
 
 //! File transfer protocol module
 
-use super::messages;
-use super::parsers;
-use super::storage;
-use super::Message;
+use super::{messages, parsers, storage, Message};
 use crate::error::ProtocolError;
 use cbor_protocol::Protocol as CborProtocol;
 use log::{error, info, warn};
 use rand::{self, Rng};
 use serde_cbor::Value;
-use std::cell::Cell;
-use std::net::SocketAddr;
-use std::str;
-use std::thread;
-use std::time::Duration;
+use std::{cell::Cell, net::SocketAddr, str, thread, time::Duration};
 
 /// Configuration data for Protocol
 #[derive(Clone)]
@@ -143,7 +135,6 @@ impl Protocol {
     /// let config = FileProtocolConfig::new(Some("my/file/storage".to_owned()), 1024, 5, 1, None, 2048);
     /// let f_protocol = FileProtocol::new("0.0.0.0:8000", "192.168.0.1:7000", config);
     /// ```
-    ///
     pub fn new(host_addr: &str, remote_addr: &str, config: ProtocolConfig) -> Self {
         // Get a local UDP socket (Bind)
         let c_protocol = CborProtocol::new(host_addr, config.transfer_chunk_size);
@@ -186,7 +177,6 @@ impl Protocol {
     ///
     /// f_protocol.send(&message);
     /// ```
-    ///
     pub fn send(&self, vec: &[u8]) -> Result<(), ProtocolError> {
         self.cbor_proto.send_message(&vec, self.remote_addr.get())?;
         Ok(())
@@ -222,7 +212,6 @@ impl Protocol {
     ///     Err(err) => panic!("Failed to receive message: {}", err),
     /// };
     /// ```
-    ///
     pub fn recv(&self, timeout: Option<Duration>) -> Result<Value, ProtocolError> {
         match timeout {
             Some(value) => Ok(self.cbor_proto.recv_message_timeout(value)?),
@@ -247,7 +236,6 @@ impl Protocol {
     ///
     /// let channel_id = f_protocol.generate_channel();
     /// ```
-    ///
     pub fn generate_channel(&self) -> Result<u32, ProtocolError> {
         let mut rng = rand::thread_rng();
         let channel_id: u32 = rng.gen_range(100_000, 999_999);
@@ -280,7 +268,6 @@ impl Protocol {
     /// let channel_id = f_protocol.generate_channel().unwrap();
     /// f_protocol.send_metadata(channel_id, &hash, num_chunks);
     /// ```
-    ///
     pub fn send_metadata(
         &self,
         channel_id: u32,
@@ -322,7 +309,6 @@ impl Protocol {
     /// let channel_id = f_protocol.generate_channel().unwrap();
     /// f_protocol.send_export(channel_id, &hash, "final/dir/service.txt", mode);
     /// ```
-    ///
     pub fn send_export(
         &self,
         channel_id: u32,
@@ -361,7 +347,6 @@ impl Protocol {
     ///
     /// f_protocol.send_import(channel_id, "service.txt");
     /// ```
-    ///
     pub fn send_import(&self, channel_id: u32, source_path: &str) -> Result<(), ProtocolError> {
         self.send(&messages::import_request(channel_id, source_path)?)?;
         Ok(())
@@ -391,7 +376,6 @@ impl Protocol {
     ///
     /// let (_hash, _num_chunks, _mode) = f_protocol.initialize_file("client.txt").unwrap();
     /// ```
-    ///
     pub fn initialize_file(&self, source_path: &str) -> Result<(String, u32, u32), ProtocolError> {
         storage::initialize_file(
             &self.config.storage_prefix,
@@ -497,7 +481,6 @@ impl Protocol {
     ///     &State::Transmitting
     /// );
     /// ```
-    ///
     pub fn message_engine<F>(
         &self,
         pump: F,
@@ -519,7 +502,7 @@ impl Protocol {
 
                     message
                 }
-                Err(ProtocolError::ReceiveTimeout) => match state.clone() {
+                Err(ProtocolError::ReceiveTimeout) => match dbg!(state.clone()) {
                     State::Receiving {
                         channel_id,
                         hash,
@@ -580,6 +563,10 @@ impl Protocol {
                         if count > self.config.hold_count {
                             match prev_state.as_ref() {
                                 State::Holding { .. } => return Ok(()),
+                                State::Receiving { .. } => {
+                                    state = *prev_state;
+                                    continue;
+                                }
                                 _other => {
                                     return Err(ProtocolError::ReceiveTimeout);
                                 }
@@ -650,14 +637,13 @@ impl Protocol {
     ///
     /// if let Ok(message) = f_protocol.recv(Some(Duration::from_millis(100))) {
     /// 	let _state = f_protocol.process_message(
-    ///			message,
-    ///			&State::StartReceive {
-    ///				path: "target/dir/file.bin".to_owned()
+    /// 			message,
+    /// 			&State::StartReceive {
+    /// 				path: "target/dir/file.bin".to_owned()
     ///         }
-    ///		);
+    /// 		);
     /// }
     /// ```
-    ///
     pub fn process_message(&self, message: Value, state: &State) -> Result<State, ProtocolError> {
         let parsed_message = parsers::parse_message(message)?;
         let new_state;

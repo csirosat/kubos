@@ -5,14 +5,16 @@ authors = ["Ryan Plauche <ryan@kubos.co>"]
 edition = "2018"
 
 [features]
-default = ["http"]
+# default = ["http"]
+default = ["udp"]
 http = ["warp", "juniper_warp"]
 udp = []
 
 [dependencies]
 tokio = { version = "0.1" }
-serde = { version = "1.0", default-features = false }
+serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = { version = "1.0", default-features = false }
+serde_cbor = { version = "0.11" }
 juniper = { version = "0.14.2", default-features = false }
 kubos-system = { path = "../../apis/system-api" }
 log = { version = "^0.4.0", default-features = false }

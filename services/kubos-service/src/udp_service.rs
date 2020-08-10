@@ -1,4 +1,3 @@
-//
 // Copyright (C) 2018 Kubos Corporation
 //
 // Licensed under the Apache License, Version 2.0 (the "License")
@@ -14,15 +13,15 @@
 // limitations under the License.
 //
 
-use juniper::{Context as JuniperContext, GraphQLType, RootNode};
+use juniper::{execute, Context as JuniperContext, GraphQLType, RootNode, Variables};
 use kubos_system::Config;
 use log::{error, info};
-use std::collections::HashMap;
-use std::net::SocketAddr;
-use std::sync::{Arc, RwLock};
-use juniper::{execute, Variables};
-use serde_json::json;
-use std::net::UdpSocket;
+use serde::Serialize;
+use std::{
+    collections::HashMap,
+    net::{SocketAddr, UdpSocket},
+    sync::{Arc, RwLock},
+};
 
 /// Context struct used by a service to provide Juniper context,
 /// subsystem access and persistent storage.
@@ -183,23 +182,43 @@ where
                         &self.context,
                     ) {
                         Ok((val, errs)) => {
-                            let errs_msg: String = errs
-                                .into_iter()
-                                .map(|x| serde_json::to_string(&x).unwrap())
-                                .collect();
+                            // let errs_msg : String = errs
+                            // 	.into_iter()
+                            // 	// .map(|x| serde_cbor::to_string(&x).unwrap())
+                            // 	.map(|x| serde_json::to_string(&x).unwrap())
+                            // 	.collect();
 
-                            json!({
-                                "data": val,
-                                "errors": errs_msg})
-                            .to_string()
+                            // json!({
+                            //     "data": val,
+                            //     "errors": errs_msg})
+                            // .to_string()
+
+                            serde_cbor::to_vec(&CborGQLResponse {
+                                data: val,
+                                errors: errs,
+                            })
+                            .unwrap()
                         }
-                        Err(e) => json!({ "errors": e }).to_string(),
+                        Err(e) => serde_cbor::to_vec(&CborGQLErrors { errors: e }).unwrap(),
                     };
-                    if let Err(e) = socket.send_to(&resp.as_bytes(), &peer) {
+                    if let Err(e) = socket.send_to(&resp, &peer) {
                         error!("Failed to send udp response: {:?}", e);
                     };
                 }
             }
         }
     }
+}
+
+#[derive(Serialize)]
+struct CborGQLResponse {
+    data: juniper::Value<juniper::DefaultScalarValue>,
+
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    errors: Vec<juniper::ExecutionError<juniper::DefaultScalarValue>>,
+}
+
+#[derive(Serialize)]
+struct CborGQLErrors<'a> {
+    errors: juniper::GraphQLError<'a>,
 }
