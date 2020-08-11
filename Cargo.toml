@@ -130,8 +130,9 @@ panic = "abort"
 #codegen-units = 1
 
 #[patch.crates-io]
-# nix = { path = "../nix" }
-# libc = { path = "../libc" }
-#backtrace = { path = "../backtrace-rs" }
-#mio = { path = "../mio" }
-#filetime = { path = "../filetime" }
+#nix = { path = "../uclinux-port/dependencies/nix" }
+#libc = { path = "../uclinux-port/dependencies/libc" }
+#backtrace = { path = "../uclinux-port/dependencies/backtrace-rs" }
+#mio = { path = "../uclinux-port/dependencies/mio" }
+#filetime = { path = "../uclinux-port/dependencies/filetime" }
+

@@ -1,5 +1,11 @@
 #!/bin/bash
 
-export CC=/home/vagrant/armv7m-uclibc-2018/bin/arm-buildroot-uclinux-uclibcgnueabi-gcc
-export CXX=/home/vagrant/armv7m-uclibc-2018/bin/arm-buildroot-uclinux-uclibcgnueabi-g++
-export XARGO_RUST_SRC=/vagrant/repos/rust/src
+ROOT=`git rev-parse --show-superproject-working-tree`
+TOOLCHAINS=$ROOT/toolchains
+THIRDPARTY=$ROOT/third-party
+DEPS=$THIRDPARTY/uclinux-port/dependencies
+
+export  CC=$TOOLCHAINS/buildroot/host/bin/arm-buildroot-uclinux-uclibcgnueabi-gcc
+export CXX=$TOOLCHAINS/buildroot/host/bin/arm-buildroot-uclinux-uclibcgnueabi-g++
+export XARGO_RUST_SRC=$DEPS/rust/src
+

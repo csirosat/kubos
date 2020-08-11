@@ -3,6 +3,7 @@ stage = 0
 
 [target.thumbv7m-unknown-linux-uclibc.dependencies.compiler_builtins]
 
-# [patch.crates-io]
-# compiler_builtins = { path = "../uclinux-port/dependencies/compiler-builtins" }
-# libc = { path = "../uclinux-port/dependencies/libc" }
+#[patch.crates-io]
+#compiler_builtins = { path = "../uclinux-port/dependencies/compiler-builtins" }
+#libc = { path = "../uclinux-port/dependencies/libc" }
+

@@ -11,5 +11,6 @@ paths = [
 ]
 
 [target.thumbv7m-unknown-linux-uclibc]
-linker = "/home/vagrant/armv7m-uclibc-2018/bin/arm-buildroot-uclinux-uclibcgnueabi-gcc"
-ar = "/home/vagrant/armv7m-uclibc-2018/bin/arm-buildroot-uclinux-uclibcgnueabi-ar"
+linker = "../../toolchains/buildroot/host/bin/arm-buildroot-uclinux-uclibcgnueabi-gcc"
+ar     = "../../toolchains/buildroot/host/bin/arm-buildroot-uclinux-uclibcgnueabi-ar"
+
