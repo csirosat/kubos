@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 echo "Setup Environment"
 source env.sh
@@ -7,10 +8,10 @@ source env.sh
 #rm -rf ~/.xargo
 #cargo clean
 
-PKG_CONFIG_ALLOW_CROSS=1 RUST_TARGET_PATH=`pwd` xargo build --target thumbv7m-unknown-linux-uclibc -p kubos-app-service --release
-PKG_CONFIG_ALLOW_CROSS=1 RUST_TARGET_PATH=`pwd` xargo build --target thumbv7m-unknown-linux-uclibc -p scheduler-service --release
-PKG_CONFIG_ALLOW_CROSS=1 RUST_TARGET_PATH=`pwd` xargo build --target thumbv7m-unknown-linux-uclibc -p telemetry-service --release
-PKG_CONFIG_ALLOW_CROSS=1 RUST_TARGET_PATH=`pwd` xargo build --target thumbv7m-unknown-linux-uclibc -p shell-service --release
-PKG_CONFIG_ALLOW_CROSS=1 RUST_TARGET_PATH=`pwd` xargo build --target thumbv7m-unknown-linux-uclibc -p file-service --release
-PKG_CONFIG_ALLOW_CROSS=1 RUST_TARGET_PATH=`pwd` xargo build --target thumbv7m-unknown-linux-uclibc -p monitor-service --release
+APPS="file-service kubos-app-service monitor-service scheduler-service shell-service telemetry-service"
+
+for app in $APPS
+do
+  PKG_CONFIG_ALLOW_CROSS=1 RUST_TARGET_PATH=`pwd` xargo build --target thumbv7m-unknown-linux-uclibc -p $app --release
+done
 
