@@ -274,7 +274,7 @@ version = "0.1.0"
 dependencies = [
  "failure",
  "log 0.4.11",
- "serde_cbor",
+ "serde_cbor 0.8.2",
 ]
 
 [[package]]
@@ -1076,6 +1076,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "hashbrown"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "34f595585f103464d8d2f6e9864682d74c1601fed5e07d62b1c9058dba8246fb"
+dependencies = [
+ "autocfg 1.0.0",
+]
+
+[[package]]
 name = "headers"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1623,6 +1632,7 @@ dependencies = [
  "log 0.4.11",
  "pkg-config",
  "serde",
+ "serde_cbor 0.11.1",
  "serde_json",
  "tokio 0.1.22",
  "warp",
@@ -3102,6 +3112,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_cbor"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e18acfa2f90e8b735b2836ab8d538de304cbb6729a7360729ea5a895d15a622"
+dependencies = [
+ "half",
+ "serde",
+]
+
+[[package]]
 name = "serde_derive"
 version = "1.0.114"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3252,7 +3272,7 @@ dependencies = [
  "failure",
  "kubos-system",
  "log 0.4.11",
- "serde_cbor",
+ "serde_cbor 0.8.2",
  "shell-protocol",
 ]
 
