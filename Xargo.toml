@@ -3,7 +3,6 @@ stage = 0
 
 [target.thumbv7m-unknown-linux-uclibc.dependencies.compiler_builtins]
 
-#[patch.crates-io]
-#compiler_builtins = { path = "../uclinux-port/dependencies/compiler-builtins" }
-#libc = { path = "../uclinux-port/dependencies/libc" }
-
+[patch.crates-io]
+compiler_builtins = { git = "https://github.com/kubos/compiler-builtins", branch = "fix-thumbv7m-none-uclibc" }
+libc = { git = "https://github.com/kubos/libc", branch = "uclibc-fixes"}

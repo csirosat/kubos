@@ -129,10 +129,8 @@ opt-level = 0
 panic = "abort"
 #codegen-units = 1
 
-#[patch.crates-io]
-#nix = { path = "../uclinux-port/dependencies/nix" }
-#libc = { path = "../uclinux-port/dependencies/libc" }
-#backtrace = { path = "../uclinux-port/dependencies/backtrace-rs" }
-#mio = { path = "../uclinux-port/dependencies/mio" }
-#filetime = { path = "../uclinux-port/dependencies/filetime" }
-
+[patch.crates-io]
+nix = { git = "https://github.com/kubos/nix", branch = "uclibc-fix"}
+libc = { git = "https://github.com/kubos/libc", branch = "uclibc-fixes"}
+backtrace = { git = "https://github.com/kubos/backtrace-rs", branch = "uclibc-fixes"}
+mio = { git = "https://github.com/kubos/mio", branch = "uclibc-fixes"}

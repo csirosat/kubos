@@ -1,15 +1,6 @@
 #[build]
 #target = "thumbv7m-unknown-linux-uclibc"
 
-paths = [
-    "../uclinux-port/dependencies/libc",
-    "../uclinux-port/dependencies/nix",
-    "../uclinux-port/dependencies/mio",
-    "../uclinux-port/dependencies/backtrace-rs",
-    "../uclinux-port/dependencies/filetime",
-    "../uclinux-port/dependencies/compiler-builtins"
-]
-
 [target.thumbv7m-unknown-linux-uclibc]
 linker = "../../toolchains/buildroot/host/bin/arm-buildroot-uclinux-uclibcgnueabi-gcc"
 ar     = "../../toolchains/buildroot/host/bin/arm-buildroot-uclinux-uclibcgnueabi-ar"
