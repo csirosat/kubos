@@ -134,3 +134,5 @@ nix = { git = "https://github.com/kubos/nix", branch = "uclibc-fix"}
 libc = { git = "https://github.com/kubos/libc", branch = "uclibc-fixes"}
 backtrace = { git = "https://github.com/kubos/backtrace-rs", branch = "uclibc-fixes"}
 mio = { git = "https://github.com/kubos/mio", branch = "uclibc-fixes"}
+serde = { git = "https://github.com/grantperry/serde.git" }
+serde_cbor = { git = "https://github.com/grantperry/cbor.git" }

@@ -23,5 +23,5 @@ pub struct Entry {
     pub timestamp: f64,
     pub subsystem: String,
     pub parameter: String,
-    pub value: String,
+    pub value: Vec<u8>,
 }

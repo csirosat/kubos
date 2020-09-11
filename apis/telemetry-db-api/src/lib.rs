@@ -85,7 +85,7 @@ impl Database {
                     timestamp DOUBLE NOT NULL,
                     subsystem VARCHAR(255) NOT NULL,
                     parameter VARCHAR(255) NOT NULL,
-                    value VARCHAR(255) NOT NULL,
+                    value BLOB NOT NULL,
                     PRIMARY KEY (timestamp, subsystem, parameter))",
                 )
                 .execute(&self.connection)
@@ -105,13 +105,13 @@ impl Database {
         timestamp: f64,
         subsystem: &'a str,
         parameter: &'a str,
-        value: &'a str,
+        value: &Vec<u8>,
     ) -> QueryResult<usize> {
         let new_entry = Entry {
             timestamp,
             subsystem: String::from(subsystem),
             parameter: String::from(parameter),
-            value: String::from(value),
+            value: value.to_owned(),
         };
 
         insert_into(telemetry::table)
@@ -123,7 +123,7 @@ impl Database {
         &self,
         subsystem: &'a str,
         parameter: &'a str,
-        value: &'a str,
+        value: &Vec<u8>,
     ) -> QueryResult<usize> {
         let time = time::now_utc().to_timespec();
         let timestamp = time.sec as f64 + (f64::from(time.nsec) / 1_000_000_000.0);
@@ -142,6 +142,6 @@ table! {
         timestamp -> Double,
         subsystem -> Text,
         parameter -> Text,
-        value -> Text,
+        value -> Binary,
     }
 }

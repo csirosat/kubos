@@ -29,7 +29,7 @@ struct DataPoint {
     timestamp: Option<f64>,
     subsystem: String,
     parameter: String,
-    value: String,
+    value: Vec<u8>,
 }
 
 impl DirectUdp {
@@ -63,11 +63,11 @@ impl DirectUdp {
                 .map_err(|err| format!("Failed to receive a message: {}", err))
                 .unwrap();
 
-            if let Ok(val) = serde_json::from_slice::<DataPoint>(&buf[0..(size)]) {
+            if let Ok(val) = serde_cbor::from_slice::<DataPoint>(&buf[0..(size)]) {
                 if let Err(err) = self.process(&val) {
                     error!("Error {:?} storing message {:?}", err, val);
                 }
-            } else if let Ok(vec) = serde_json::from_slice::<Vec<DataPoint>>(&buf[0..(size)]) {
+            } else if let Ok(vec) = serde_cbor::from_slice::<Vec<DataPoint>>(&buf[0..(size)]) {
                 for val in vec.iter() {
                     if let Err(err) = self.process(&val) {
                         error!("Error {:?} storing message {:?}", err, val);

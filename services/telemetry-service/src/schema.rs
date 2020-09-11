@@ -70,8 +70,8 @@ graphql_object!(Entry: () |&self| {
         &self.0.parameter
     }
 
-    field value() -> &String as "Telemetry value" {
-        &self.0.value
+    field value() -> String as "Telemetry value" {
+        serde_cbor::from_slice::<serde_cbor::Value>(&self.0.value).ok().and_then(|value| serde_json::to_string(&value).ok()).unwrap_or(String::from(""))
     }
 });
 
@@ -252,6 +252,16 @@ struct InsertEntry {
 
 graphql_object!(MutationRoot: Context | &self | {
     field insert(&executor, timestamp: Option<f64>, subsystem: String, parameter: String, value: String) -> FieldResult<InsertResponse> {
+        let value = match serde_json::from_str::<serde_json::Value>(value.as_str()).ok().and_then(|value| serde_cbor::to_vec(&value).ok()) {
+            Some(value) => value,
+            _=> {
+        return Ok(InsertResponse {
+            success: false,
+            errors: String::from("Could not convert betweek json and cbor"),
+        });
+            }
+        };
+
         let result = match timestamp {
             Some(time) => executor.context().subsystem().database.lock().or_else(|err| {
                     log::error!("insert - Failed to get lock on database: {:?}", err);
@@ -287,11 +297,21 @@ graphql_object!(MutationRoot: Context | &self | {
         for entry in entries {
             let ts = entry.timestamp.or(timestamp).unwrap_or(systime);
 
+            let value = match serde_json::from_str::<serde_json::Value>(entry.value.as_str()).ok().and_then(|value| serde_cbor::to_vec(&value).ok()) {
+                Some(value) => value,
+                _=> {
+                    return Ok(InsertResponse {
+                        success: false,
+                        errors: String::from("Could not convert betweek json and cbor"),
+                    });
+                }
+            };
+
             new_entries.push(kubos_telemetry_db::Entry {
                 timestamp: ts,
                 subsystem: entry.subsystem,
                 parameter: entry.parameter,
-                value: entry.value,
+                value,
             });
         }
 
