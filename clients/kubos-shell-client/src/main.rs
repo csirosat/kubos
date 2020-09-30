@@ -19,7 +19,7 @@ use channel_protocol::{ChannelProtocol, ProtocolError};
 use clap::{value_t, App, AppSettings, Arg, SubCommand};
 use failure::{bail, Error};
 use std::collections::HashMap;
-use std::io::{self, Write};
+use std::io;
 use std::time::Duration;
 
 fn start_session(channel_proto: &ChannelProtocol) -> Result<(), Error> {
@@ -143,43 +143,43 @@ fn kill_session(
 fn run_shell(channel_proto: &ChannelProtocol, channel_id: u32) -> Result<(), Error> {
     println!("Press enter to send input to the shell session");
     println!("Press Control-D to detach from the session");
+
+    let stdin = io::BufReader::new(timeout_readwrite::TimeoutReader::new(
+        io::stdin(),
+        Duration::from_millis(10),
+    ));
+
+    use io::BufRead;
+    let mut lines = stdin.lines();
+
     loop {
-        let mut input = String::new();
-        print!(" $ ");
-        let _ = io::stdout().flush();
-        match io::stdin().read_line(&mut input) {
-            Ok(n) => {
-                if n == 0 {
+        if let Some(Ok(mut input)) = lines.next() {
+            input += "\n";
+            channel_proto.send(&shell_protocol::messages::stdin::to_cbor(
+                channel_id,
+                Some(&input),
+            )?)?;
+        }
+
+        while let Ok(m) = channel_proto.recv_message(Some(Duration::from_millis(10))) {
+            match shell_protocol::messages::parse_message(&m) {
+                Ok(shell_protocol::messages::Message::Stdout {
+                    channel_id: _channel_id,
+                    data: Some(data),
+                }) => print!("{}", data),
+                Ok(shell_protocol::messages::Message::Stderr {
+                    channel_id: _channel_id,
+                    data: Some(data),
+                }) => eprint!("{}", data),
+                Ok(shell_protocol::messages::Message::Exit { .. }) => {
                     return Ok(());
                 }
-
-                channel_proto.send(&shell_protocol::messages::stdin::to_cbor(
-                    channel_id,
-                    Some(&input),
-                )?)?;
-
-                while let Ok(m) = channel_proto.recv_message(Some(Duration::from_millis(100))) {
-                    match shell_protocol::messages::parse_message(&m) {
-                        Ok(shell_protocol::messages::Message::Stdout {
-                            channel_id: _channel_id,
-                            data: Some(data),
-                        }) => print!("{}", data),
-                        Ok(shell_protocol::messages::Message::Stderr {
-                            channel_id: _channel_id,
-                            data: Some(data),
-                        }) => eprint!("{}", data),
-                        Ok(shell_protocol::messages::Message::Exit { .. }) => {
-                            return Ok(());
-                        }
-                        Ok(shell_protocol::messages::Message::Error { message, .. }) => {
-                            eprintln!("Error received from service: {}", message);
-                            return Ok(());
-                        }
-                        _ => {}
-                    }
+                Ok(shell_protocol::messages::Message::Error { message, .. }) => {
+                    eprintln!("Error received from service: {}", message);
+                    return Ok(());
                 }
+                _ => {}
             }
-            Err(err) => bail!("Error encountered: {}", err),
         }
     }
 }
