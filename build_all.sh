@@ -10,7 +10,6 @@ source env.sh
 
 APPS="
 file-service
-kubos-app-service
 monitor-service
 scheduler-service
 shell-service
