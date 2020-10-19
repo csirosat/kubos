@@ -26,7 +26,6 @@ use serde_derive::Serialize;
 use serde_json;
 use std::fs;
 use std::fs::File;
-use std::io::prelude::*;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread::spawn;
@@ -192,8 +191,6 @@ graphql_object!(QueryRoot: Context |&self| {
             query_db(&executor.context().subsystem().database, timestamp_ge, timestamp_le, subsystem, parameters, limit)?
         };
 
-        let entries = serde_json::to_vec(&entries)?;
-
         let output_str = output.clone();
         let output_path = Path::new(&output_str);
 
@@ -206,8 +203,8 @@ graphql_object!(QueryRoot: Context |&self| {
         }
 
         {
-            let mut output_file = File::create(output_path)?;
-            output_file.write_all(&entries)?;
+            let output_file = File::create(output_path)?;
+            serde_cbor::to_writer(output_file, &entries)?;
         }
 
         if compress {
