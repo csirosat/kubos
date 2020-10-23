@@ -21,5 +21,8 @@ do
 	  xargo build --target thumbv7m-unknown-linux-uclibc -p $app --release
 done
 
-echo "$APPS" | rsync -av --files-from=- target/thumbv7m-unknown-linux-uclibc/release/ update/usr/local/sbin/
+TARGET_DIR="target/thumbv7m-unknown-linux-uclibc/release/"
+DEST_DIR="../../linux-m2s/projects/horus/update/usr/local/sbin/"
+
+echo "$APPS" | rsync -av --files-from=- $TARGET_DIR $DEST_DIR
 
