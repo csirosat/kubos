@@ -80,7 +80,3 @@ dist/
 # During local SDK development, the following directories may be created
 app-registry/
 
-# Update archive
-update/
-update.tgz
-
