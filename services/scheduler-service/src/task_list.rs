@@ -32,7 +32,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use tokio::prelude::future::lazy;
 use tokio::prelude::*;
-use tokio::runtime::Runtime;
+use tokio::runtime::Builder;
 
 // Task list's contents
 #[derive(Debug, GraphQLObject, Serialize, Deserialize)]
@@ -112,30 +112,36 @@ impl TaskList {
         let (stopper, receiver) = channel::<()>();
         let service_url = app_service_url.to_owned();
         let tasks = self.tasks.to_vec();
-        let thread_handle = thread::spawn(move || {
-            let mut runner = Runtime::new().unwrap_or_else(|e| {
-                error!("Failed to create timer runtime: {}", e);
-                panic!("Failed to create timer runtime: {}", e);
-            });
+        let thread_handle = thread::Builder::new()
+            .stack_size(16 * 1024)
+            .spawn(move || {
+                let mut runner = Builder::new()
+                    .stack_size(16 * 1024)
+                    .build()
+                    .unwrap_or_else(|e| {
+                        error!("Failed to create timer runtime: {}", e);
+                        panic!("Failed to create timer runtime: {}", e);
+                    });
 
-            runner.spawn(lazy(move || {
-                for task in tasks {
-                    info!("Scheduling task '{}'", &task.app.name);
-                    tokio::spawn(task.schedule(service_url.clone()));
-                }
-                Ok(())
-            }));
+                runner.spawn(lazy(move || {
+                    for task in tasks {
+                        info!("Scheduling task '{}'", &task.app.name);
+                        tokio::spawn(task.schedule(service_url.clone()));
+                    }
+                    Ok(())
+                }));
 
-            // Wait on the stop message before ending the runtime
-            receiver.recv().unwrap_or_else(|e| {
-                error!("Failed to received thread stop: {:?}", e);
-                panic!("Failed to received thread stop: {:?}", e);
-            });
-            runner.shutdown_now().wait().unwrap_or_else(|e| {
-                error!("Failed to wait on runtime shutdown: {:?}", e);
-                panic!("Failed to wait on runtime shutdown: {:?}", e);
+                // Wait on the stop message before ending the runtime
+                receiver.recv().unwrap_or_else(|e| {
+                    error!("Failed to received thread stop: {:?}", e);
+                    panic!("Failed to received thread stop: {:?}", e);
+                });
+                runner.shutdown_now().wait().unwrap_or_else(|e| {
+                    error!("Failed to wait on runtime shutdown: {:?}", e);
+                    panic!("Failed to wait on runtime shutdown: {:?}", e);
+                })
             })
-        });
+            .unwrap();
         let thread_handle = Arc::new(Mutex::new(thread_handle));
         Ok(SchedulerHandle {
             thread_handle,
