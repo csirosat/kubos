@@ -209,6 +209,7 @@ pub fn import_raw_task_list(
             err: e.to_string(),
             name: name.to_owned(),
         })?;
+    info!("File {} created.", schedule_dest);
     task_list
         .write_all(json.as_bytes())
         .map_err(|e| SchedulerError::ImportError {

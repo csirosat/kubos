@@ -170,7 +170,7 @@ where
         let socket = UdpSocket::bind(&addr).unwrap();
         info!("Listening on: {}", addr);
 
-        let mut buf = [0; 4096];
+        let mut buf = vec![0; 4096].into_boxed_slice();
         loop {
             if let Ok((size, peer)) = socket.recv_from(&mut buf) {
                 if let Ok(query) = String::from_utf8(buf[0..size].to_vec()) {
