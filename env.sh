@@ -5,7 +5,8 @@ TOOLCHAINS=$ROOT/toolchains
 THIRDPARTY=$ROOT/third-party
 DEPS=$THIRDPARTY/uclinux-port/dependencies
 
-export  CC=$TOOLCHAINS/buildroot/host/bin/arm-buildroot-uclinux-uclibcgnueabi-gcc
-export CXX=$TOOLCHAINS/buildroot/host/bin/arm-buildroot-uclinux-uclibcgnueabi-g++
+export     CC=$TOOLCHAINS/buildroot/host/bin/arm-buildroot-uclinux-uclibcgnueabi-gcc
+export    CXX=$TOOLCHAINS/buildroot/host/bin/arm-buildroot-uclinux-uclibcgnueabi-g++
+export FLTHDR=$TOOLCHAINS/buildroot/host/bin/arm-buildroot-uclinux-uclibcgnueabi-flthdr
 export XARGO_RUST_SRC=$DEPS/rust/src
 
