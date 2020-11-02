@@ -26,9 +26,9 @@ use log::{error, info};
 use serde::{Deserialize, Serialize};
 use serde_json::from_str;
 use std::collections::HashMap;
-use std::process::Command;
 use std::thread;
 use std::time::Duration;
+use tokio::process::Command;
 
 #[derive(Debug, Deserialize)]
 pub struct StartAppResponse {
@@ -74,7 +74,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn execute(&self, _service_url: &str) {
+    pub async fn execute(&self, _service_url: &str) {
         info!("Start app {}", self.name);
 
         let mut cmd = Command::new(self.name.clone());
@@ -84,25 +84,17 @@ impl App {
             cmd.args(args);
         };
 
-        dbg!(&cmd);
-
-        let mut child = cmd.spawn().map_err(|err| {
-            error!("Failed to spawn app {}: {:?}", self.name, err);
-        }).unwrap();
-
-        // Give the app a moment to run
-        thread::sleep(Duration::from_millis(300));
-
-        match child.try_wait() {
-            Ok(Some(status)) => {
+        match cmd.status().await {
+            Ok(status) => {
                 if !status.success() {
-                    error!("App returned {}", status)
+                    let a = match status.code() {
+                        Some(a) => a,
+                        None => -1,
+                    };
+                    info!("error: App returned {}", a);
                 } else {
-                    info!("Exited healthy")
+                    info!("Exited healthy");
                 }
-            }
-            Ok(None) => {
-                info!("still running");
             }
             Err(err) => error!(
                 "Started app, but failed to fetch status information: {:?}",

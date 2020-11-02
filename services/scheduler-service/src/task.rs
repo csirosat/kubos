@@ -25,11 +25,11 @@ use chrono::Utc;
 use juniper::GraphQLObject;
 use log::error;
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
-use std::time::Instant;
-use tokio::prelude::*;
-use tokio::timer::Delay;
-use tokio::timer::Interval;
+use std::sync::Arc;
+use tokio::time::delay_until;
+use tokio::time::interval_at;
+use tokio::time::Duration;
+use tokio::time::Instant;
 
 // Configuration used to schedule app execution
 #[derive(Clone, Debug, GraphQLObject, Serialize, Deserialize)]
@@ -103,7 +103,7 @@ impl Task {
         }
     }
 
-    pub fn schedule(&self, service_url: String) -> Box<dyn Future<Item = (), Error = ()> + Send> {
+    pub async fn schedule(self: Arc<Self>, service_url: String) {
         let name = self.app.name.to_owned();
         let duration = match self.get_duration() {
             Ok(d) => d,
@@ -112,7 +112,7 @@ impl Task {
                     "Failed to parse time specification for task '{}': {}",
                     name, e
                 );
-                return Box::new(future::err::<(), ()>(()));
+                return;
             }
         };
 
@@ -121,28 +121,17 @@ impl Task {
         let app = self.app.clone();
 
         match period {
-            Ok(Some(period)) => Box::new(
-                Interval::new(when, period)
-                    .for_each(move |_| {
-                        app.execute(&service_url.clone());
-                        Ok(())
-                    })
-                    .map_err(move |e| {
-                        error!("Recurring interval errored for task '{}': {}", name, e);
-                        panic!("Recurring interval errored for task '{}': {}", name, e)
-                    }),
-            ),
-            _ => Box::new(
-                Delay::new(when)
-                    .and_then(move |_| {
-                        app.execute(&service_url);
-                        Ok(())
-                    })
-                    .map_err(move |e| {
-                        error!("Delay errored for task '{}': {}", name, e);
-                        panic!("Delay errored for task '{}': {}", name, e)
-                    }),
-            ),
+            Ok(Some(period)) => {
+                let mut interval = interval_at(when, period);
+                loop {
+                    interval.tick().await;
+                    app.execute(&service_url.clone()).await;
+                }
+            }
+            _ => {
+                delay_until(when).await;
+                app.execute(&service_url).await;
+            }
         }
     }
 }

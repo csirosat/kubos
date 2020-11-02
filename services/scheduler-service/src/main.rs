@@ -51,19 +51,7 @@ fn main() -> Result<(), SchedulerError> {
         String::from(DEFAULT_SCHEDULES_DIR)
     };
 
-    let apps_service_config =
-        Config::new("app-service").map_err(|err| SchedulerError::StartError {
-            err: format!("Failed to load app service config: {:?}", err),
-        })?;
-
-    let apps_service_url =
-        apps_service_config
-            .hosturl()
-            .ok_or_else(|| SchedulerError::StartError {
-                err: "Failed to fetch app service url".to_owned(),
-            })?;
-
-    let scheduler = Scheduler::new(&scheduler_dir, &apps_service_url)?;
+    let scheduler = Scheduler::new(&scheduler_dir, "")?;
 
     info!("Starting scheduler-service - {:?}", scheduler.scheduler_dir);
 
