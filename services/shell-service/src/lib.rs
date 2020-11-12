@@ -95,16 +95,19 @@ fn spawn_process(
         proc_handle.id(),
     )?)?;
 
-    thread::spawn(move || {
-        thread_body(
-            channel_protocol,
-            channel_id,
-            timeout,
-            proc_handle,
-            &shared_threads,
-            &receiver,
-        )
-    });
+    thread::Builder::new()
+        .stack_size(16 * 1024)
+        .spawn(move || {
+            thread_body(
+                channel_protocol,
+                channel_id,
+                timeout,
+                proc_handle,
+                &shared_threads,
+                &receiver,
+            )
+        })
+        .unwrap();
 
     Ok((pid, sender))
 }

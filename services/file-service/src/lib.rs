@@ -165,45 +165,48 @@ pub fn recv_loop(config: &ServiceConfig) -> Result<(), failure::Error> {
             // listen for requests from other clients
             let shared_threads = threads.clone();
             let downlink_ip_ref = downlink_ip.to_owned();
-            thread::spawn(move || {
-                let state = State::Holding {
-                    count: 0,
-                    prev_state: Box::new(State::Done),
-                };
+            thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || {
+                    let state = State::Holding {
+                        count: 0,
+                        prev_state: Box::new(State::Done),
+                    };
 
-                // Set up the file system processor with the reply socket information
-                let f_protocol = FileProtocol::new(
-                    &format!("{}:{}", host_ref, 0),
-                    &format!("{}:{}", downlink_ip_ref, downlink_port),
-                    config_ref,
-                );
+                    // Set up the file system processor with the reply socket information
+                    let f_protocol = FileProtocol::new(
+                        &format!("{}:{}", host_ref, 0),
+                        &format!("{}:{}", downlink_ip_ref, downlink_port),
+                        config_ref,
+                    );
 
-                // Listen, process, and react to the remaining messages in the
-                // requested operation
-                if let Err(e) = f_protocol.message_engine(
-                    |d| match receiver.recv_timeout(d) {
-                        Ok(v) => Ok(v),
-                        Err(RecvTimeoutError::Timeout) => Err(ProtocolError::ReceiveTimeout),
-                        Err(e) => Err(ProtocolError::ReceiveError {
-                            err: format!("Error {:?}", e),
-                        }),
-                    },
-                    timeout_ref,
-                    &state,
-                ) {
-                    warn!("Encountered errors while processing transaction: {}", e);
-                }
+                    // Listen, process, and react to the remaining messages in the
+                    // requested operation
+                    if let Err(e) = f_protocol.message_engine(
+                        |d| match receiver.recv_timeout(d) {
+                            Ok(v) => Ok(v),
+                            Err(RecvTimeoutError::Timeout) => Err(ProtocolError::ReceiveTimeout),
+                            Err(e) => Err(ProtocolError::ReceiveError {
+                                err: format!("Error {:?}", e),
+                            }),
+                        },
+                        timeout_ref,
+                        &state,
+                    ) {
+                        warn!("Encountered errors while processing transaction: {}", e);
+                    }
 
-                // Remove ourselves from threads list if we are finished
-                shared_threads
-                    .lock()
-                    .map_err(|err| {
-                        error!("Failed to get threads mutex: {:?}", err);
-                        err
-                    })
-                    .unwrap()
-                    .remove(&channel_id);
-            });
+                    // Remove ourselves from threads list if we are finished
+                    shared_threads
+                        .lock()
+                        .map_err(|err| {
+                            error!("Failed to get threads mutex: {:?}", err);
+                            err
+                        })
+                        .unwrap()
+                        .remove(&channel_id);
+                })
+                .unwrap();
         }
 
         if let Some(sender) = threads

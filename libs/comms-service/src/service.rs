@@ -145,9 +145,12 @@ impl CommsService {
         if control.read.is_some() {
             let telem_ref = telem.clone();
             let control_ref = control.clone();
-            thread::spawn(move || {
-                read_thread::<ReadConnection, WriteConnection, Packet>(control_ref, &telem_ref)
-            });
+            thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || {
+                    read_thread::<ReadConnection, WriteConnection, Packet>(control_ref, &telem_ref)
+                })
+                .unwrap();
         }
 
         // For each provided `write()` function, spawn a downlink endpoint thread.
@@ -158,11 +161,14 @@ impl CommsService {
                 let conn_ref = control.write_conn.clone();
                 let write_ref = write.clone();
                 let ip = control.ip;
-                thread::spawn(move || {
-                    downlink_endpoint::<ReadConnection, WriteConnection, Packet>(
-                        &telem_ref, port_ref, conn_ref, &write_ref, ip,
-                    );
-                });
+                thread::Builder::new()
+                    .stack_size(16 * 1024)
+                    .spawn(move || {
+                        downlink_endpoint::<ReadConnection, WriteConnection, Packet>(
+                            &telem_ref, port_ref, conn_ref, &write_ref, ip,
+                        );
+                    })
+                    .unwrap();
             }
         }
 
@@ -234,17 +240,20 @@ fn read_thread<
                 let sat_ref = comms.ip;
                 let data_ref = data.clone();
 
-                thread::spawn(move || match handle_udp_passthrough(packet, sat_ref) {
-                    Ok(_) => {
-                        log_telemetry(&data_ref, &TelemType::Down).unwrap();
-                        info!("UDP Packet successfully uplinked");
-                    }
-                    Err(e) => {
-                        log_telemetry(&data_ref, &TelemType::DownFailed).unwrap();
-                        log_error(&data_ref, e.to_string()).unwrap();
-                        error!("UDP packet failed to uplink: {}", e.to_string());
-                    }
-                });
+                thread::Builder::new()
+                    .stack_size(16 * 1024)
+                    .spawn(move || match handle_udp_passthrough(packet, sat_ref) {
+                        Ok(_) => {
+                            log_telemetry(&data_ref, &TelemType::Down).unwrap();
+                            info!("UDP Packet successfully uplinked");
+                        }
+                        Err(e) => {
+                            log_telemetry(&data_ref, &TelemType::DownFailed).unwrap();
+                            log_error(&data_ref, e.to_string()).unwrap();
+                            error!("UDP packet failed to uplink: {}", e.to_string());
+                        }
+                    })
+                    .unwrap();
             }
             #[cfg(features = "graphql")]
             PayloadType::GraphQL => {
@@ -265,26 +274,29 @@ fn read_thread<
                 let sat_ref = comms.ip;
                 let time_ref = comms.timeout;
                 let num_handlers_ref = num_handlers.clone();
-                thread::spawn(move || {
-                    let res =
-                        handle_graphql_request(conn_ref, &write_ref, packet, time_ref, sat_ref);
+                thread::Builder::new()
+                    .stack_size(16 * 1024)
+                    .spawn(move || {
+                        let res =
+                            handle_graphql_request(conn_ref, &write_ref, packet, time_ref, sat_ref);
 
-                    if let Ok(mut num_handlers) = num_handlers_ref.lock() {
-                        *num_handlers -= 1;
-                    }
+                        if let Ok(mut num_handlers) = num_handlers_ref.lock() {
+                            *num_handlers -= 1;
+                        }
 
-                    match res {
-                        Ok(_) => {
-                            log_telemetry(&data_ref, &TelemType::Down).unwrap();
-                            info!("GraphQL Packet successfully downlinked");
+                        match res {
+                            Ok(_) => {
+                                log_telemetry(&data_ref, &TelemType::Down).unwrap();
+                                info!("GraphQL Packet successfully downlinked");
+                            }
+                            Err(e) => {
+                                log_telemetry(&data_ref, &TelemType::DownFailed).unwrap();
+                                log_error(&data_ref, e.to_string()).unwrap();
+                                error!("GraphQL packet failed to downlink: {}", e.to_string());
+                            }
                         }
-                        Err(e) => {
-                            log_telemetry(&data_ref, &TelemType::DownFailed).unwrap();
-                            log_error(&data_ref, e.to_string()).unwrap();
-                            error!("GraphQL packet failed to downlink: {}", e.to_string());
-                        }
-                    }
-                });
+                    })
+                    .unwrap();
             }
         }
     }

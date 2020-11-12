@@ -29,7 +29,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use std::thread::spawn;
+use std::thread;
 use tar;
 
 type Context = kubos_service::Context<Subsystem>;
@@ -45,7 +45,10 @@ impl Subsystem {
 
         if let Some(udp_url) = direct_udp {
             let udp = DirectUdp::new(db.clone());
-            spawn(move || udp.start(udp_url.to_owned()));
+            thread::Builder::new()
+                .stack_size(16 * 1024)
+                .spawn(move || udp.start(udp_url.to_owned()))
+                .unwrap();
         }
 
         Subsystem { database: db }

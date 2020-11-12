@@ -26,13 +26,14 @@ use juniper::GraphQLObject;
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use tokio::prelude::future::lazy;
 use tokio::prelude::*;
 use tokio::runtime::Builder;
+use tokio::time::Duration;
 
 // Task list's contents
 #[derive(Debug, GraphQLObject, Serialize, Deserialize)]
@@ -41,7 +42,7 @@ struct ListContents {
 }
 
 // Task list's metadata
-#[derive(Debug, GraphQLObject)]
+#[derive(Debug, GraphQLObject, Serialize)]
 pub struct TaskList {
     pub tasks: Vec<Task>,
     pub path: String,
@@ -111,35 +112,33 @@ impl TaskList {
     pub fn schedule_tasks(&self, app_service_url: &str) -> Result<SchedulerHandle, SchedulerError> {
         let (stopper, receiver) = channel::<()>();
         let service_url = app_service_url.to_owned();
-        let tasks = self.tasks.to_vec();
+        let tasks: Vec<Arc<Task>> = self.tasks.iter().map(|t| Arc::new(t.to_owned())).collect();
         let thread_handle = thread::Builder::new()
-            .stack_size(16 * 1024)
+            .stack_size(4 * 1024)
             .spawn(move || {
-                let mut runner = Builder::new()
-                    .stack_size(16 * 1024)
+                let tasks = tasks.clone();
+                let runner = Builder::new()
+                    .thread_stack_size(8 * 1024)
+                    .threaded_scheduler()
+                    .core_threads(1)
+                    .enable_all()
                     .build()
                     .unwrap_or_else(|e| {
                         error!("Failed to create timer runtime: {}", e);
                         panic!("Failed to create timer runtime: {}", e);
                     });
 
-                runner.spawn(lazy(move || {
-                    for task in tasks {
-                        info!("Scheduling task '{}'", &task.app.name);
-                        tokio::spawn(task.schedule(service_url.clone()));
-                    }
-                    Ok(())
-                }));
+                for task in tasks {
+                    info!("Scheduling task '{}'", &task.app.name);
+                    runner.spawn(task.schedule(service_url.clone()));
+                }
 
                 // Wait on the stop message before ending the runtime
                 receiver.recv().unwrap_or_else(|e| {
                     error!("Failed to received thread stop: {:?}", e);
                     panic!("Failed to received thread stop: {:?}", e);
                 });
-                runner.shutdown_now().wait().unwrap_or_else(|e| {
-                    error!("Failed to wait on runtime shutdown: {:?}", e);
-                    panic!("Failed to wait on runtime shutdown: {:?}", e);
-                })
+                runner.shutdown_timeout(Duration::from_secs(2));
             })
             .unwrap();
         let thread_handle = Arc::new(Mutex::new(thread_handle));
