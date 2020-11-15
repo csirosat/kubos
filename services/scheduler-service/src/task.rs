@@ -34,8 +34,8 @@ use tokio::time::Instant;
 // Configuration used to schedule app execution
 #[derive(Clone, Debug, GraphQLObject, Serialize, Deserialize)]
 pub struct Task {
-    // Description of task
-    pub description: String,
+    // Name of task
+    pub name: String,
     // Start delay specified in Xh Ym Zs format
     // Used by init and recurring tasks
     pub delay: Option<String>,
@@ -55,7 +55,7 @@ impl Task {
         if self.delay.is_some() && self.time.is_some() {
             return Err(SchedulerError::TaskParseError {
                 err: "Both delay and time defined".to_owned(),
-                description: self.description.to_owned(),
+                name: self.name.to_owned(),
             });
         }
         if let Some(delay) = &self.delay {
@@ -65,32 +65,32 @@ impl Task {
                 .datetime_from_str(&time, "%Y-%m-%d %H:%M:%S")
                 .map_err(|e| SchedulerError::TaskParseError {
                     err: format!("Failed to parse time field '{}': {}", time, e),
-                    description: self.description.to_owned(),
+                    name: self.name.to_owned(),
                 })?;
             let now = chrono::Utc::now();
 
             if run_time < now {
                 Err(SchedulerError::TaskTimeError {
                     err: format!("Task scheduled for past time: {}", time),
-                    description: self.description.to_owned(),
+                    name: self.name.to_owned(),
                 })
             } else if (run_time - now) > chrono::Duration::days(90) {
                 Err(SchedulerError::TaskTimeError {
                     err: format!("Task scheduled beyond 90 days in the future: {}", time),
-                    description: self.description.to_owned(),
+                    name: self.name.to_owned(),
                 })
             } else {
                 Ok((run_time - now)
                     .to_std()
                     .map_err(|e| SchedulerError::TaskParseError {
                         err: format!("Failed to calculate run time: {}", e),
-                        description: self.description.to_owned(),
+                        name: self.name.to_owned(),
                     })?)
             }
         } else {
             Err(SchedulerError::TaskParseError {
                 err: "No delay or time defined".to_owned(),
-                description: self.description.to_owned(),
+                name: self.name.to_owned(),
             })
         }
     }
@@ -104,7 +104,7 @@ impl Task {
     }
 
     pub async fn schedule(self: Arc<Self>, service_url: String) {
-        let name = self.app.name.to_owned();
+        let name = self.name.to_owned();
         let duration = match self.get_duration() {
             Ok(d) => d,
             Err(e) => {

@@ -68,16 +68,16 @@ pub struct StartAppGraphQL {
 // Configuration used for execution of an app
 #[derive(Clone, Debug, GraphQLObject, Serialize, Deserialize)]
 pub struct App {
-    pub name: String,
+    pub cmd: String,
     pub args: Option<Vec<String>>,
     pub config: Option<String>,
 }
 
 impl App {
     pub async fn execute(&self, _service_url: &str) {
-        info!("Start app {}", self.name);
+        info!("Start app '{}'", self.cmd);
 
-        let mut cmd = Command::new(self.name.clone());
+        let mut cmd = Command::new(self.cmd.clone());
 
         if let Some(args) = &self.args {
             // let cmd_args: Vec<String> = args.iter().map(|x| format!("{}", x)).collect();
@@ -87,18 +87,14 @@ impl App {
         match cmd.status().await {
             Ok(status) => {
                 if !status.success() {
-                    let a = match status.code() {
-                        Some(a) => a,
-                        None => -1,
-                    };
-                    info!("error: App returned {}", a);
+                    error!("App '{}' returned: {}", self.cmd, status)
                 } else {
-                    info!("Exited healthy");
+                    info!("App '{}' exited cleanly", self.cmd)
                 }
             }
             Err(err) => error!(
-                "Started app, but failed to fetch status information: {:?}",
-                err
+                "Started app '{}', but failed to fetch status information: {:?}",
+                self.cmd, err
             ),
         }
     }

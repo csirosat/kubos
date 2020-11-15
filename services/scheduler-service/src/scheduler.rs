@@ -152,9 +152,9 @@ impl Scheduler {
     fn check_start(&self, mode_path: &str) -> Result<(), SchedulerError> {
         for list in get_mode_task_lists(&mode_path)? {
             match validate_task_list(&list.path) {
-                Err(SchedulerError::TaskTimeError { description, .. }) => warn!(
+                Err(SchedulerError::TaskTimeError { name, .. }) => warn!(
                     "Found task '{}' in task list '{}' with out of bounds time",
-                    description, list.filename
+                    name, list.filename
                 ),
                 Ok(()) => {}
                 Err(e) => return Err(e),

@@ -104,23 +104,23 @@ pub enum SchedulerError {
         name: String,
     },
     // An error was raised when parsing a task
-    #[fail(display = "Failed to parse task '{}': {}", description, err)]
+    #[fail(display = "Failed to parse task '{}': {}", name, err)]
     TaskParseError {
         /// The specific parsing error
         err: String,
-        /// The description of task that failed to parse
-        description: String,
+        /// The name of task that failed to parse
+        name: String,
     },
     // An out of bounds time was found when parsing a task
     #[fail(
         display = "Out of bounds time found in task '{}': {}",
-        description, err
+        name, err
     )]
     TaskTimeError {
         /// The specific parsing error
         err: String,
-        /// The description of task that failed to parse
-        description: String,
+        /// The name of task that failed to parse
+        name: String,
     },
 }
 

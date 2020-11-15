@@ -129,7 +129,7 @@ impl TaskList {
                     });
 
                 for task in tasks {
-                    info!("Scheduling task '{}'", &task.app.name);
+                    info!("Scheduling task '{}'", &task.name);
                     runner.spawn(task.schedule(service_url.clone()));
                 }
 
