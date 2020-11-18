@@ -190,7 +190,6 @@ fn read_thread<
     let read = comms.read.unwrap();
 
     // Initiate counter for handlers
-    #[cfg(features = "graphql")]
     let num_handlers: Arc<Mutex<u16>> = Arc::new(Mutex::new(0));
 
     loop {
@@ -255,7 +254,6 @@ fn read_thread<
                     })
                     .unwrap();
             }
-            #[cfg(features = "graphql")]
             PayloadType::GraphQL => {
                 if let Ok(mut num_handlers) = num_handlers.lock() {
                     if *num_handlers >= comms.max_num_handlers {
@@ -304,7 +302,6 @@ fn read_thread<
 
 // This thread sends a query/mutation to its intended destination and waits for a response.
 // The thread then writes the response to the gateway.
-#[cfg(features = "graphql")]
 #[allow(clippy::boxed_local)]
 fn handle_graphql_request<WriteConnection: Clone, Packet: LinkPacket>(
     write_conn: WriteConnection,
@@ -315,22 +312,19 @@ fn handle_graphql_request<WriteConnection: Clone, Packet: LinkPacket>(
 ) -> Result<(), String> {
     use std::time::Duration;
 
-    let payload = message.payload().to_vec();
+    let socket = UdpSocket::bind((sat_ip, 0)).map_err(|e| e.to_string())?;
 
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_millis(timeout))
-        .build()
+    socket
+        .set_read_timeout(Some(Duration::from_millis(timeout)))
         .map_err(|e| e.to_string())?;
 
-    let mut res = client
-        .post(&format!("http://{}:{}", sat_ip, message.destination()))
-        .body(payload)
-        .send()
+    socket
+        .send_to(&message.payload(), (sat_ip, message.destination()))
         .map_err(|e| e.to_string())?;
 
-    let size = res.content_length().unwrap_or(0) as usize;
-    let buf = res.text().unwrap_or_else(|_| "".to_owned());
-    let buf = buf.as_bytes();
+    let mut buf = [0; 4 * 1024];
+
+    let (size, _addr) = socket.recv_from(&mut buf).map_err(|e| e.to_string())?;
 
     // Take received message and wrap it in a LinkPacket
     let packet = Packet::build(message.command_id(), PayloadType::GraphQL, 0, &buf[0..size])
@@ -338,7 +332,9 @@ fn handle_graphql_request<WriteConnection: Clone, Packet: LinkPacket>(
         .map_err(|e| e.to_string())?;
 
     // Write packet to the gateway
-    write(&write_conn.clone(), &packet).map_err(|e| e.to_string())
+    write(&write_conn.clone(), &packet).map_err(|e| e.to_string())?;
+
+    Ok(())
 }
 
 // This function takes a Packet with PayloadType::UDP and sends the payload over a
