@@ -96,7 +96,7 @@ fn spawn_process(
     )?)?;
 
     thread::Builder::new()
-        .stack_size(16 * 1024)
+        .stack_size(64 * 1024)
         .spawn(move || {
             thread_body(
                 channel_protocol,

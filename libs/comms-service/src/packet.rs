@@ -21,12 +21,14 @@ use crate::CommsResult;
 /// Enum representing the different payload types handled
 /// by the communications service
 #[repr(u8)]
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum PayloadType {
     /// Packet intended for GraphQL request/response
     GraphQL,
     /// Packet intended for UDP passthrough
     UDP,
+    /// Packet intended for UDP passthrough and streaming
+    UDPDlStream,
     /// Unknown type
     Unknown(u16),
 }
@@ -36,6 +38,7 @@ impl From<u16> for PayloadType {
         match num {
             0 => PayloadType::GraphQL,
             1 => PayloadType::UDP,
+            2 => PayloadType::UDPDlStream,
             other => PayloadType::Unknown(other),
         }
     }
@@ -46,6 +49,7 @@ impl From<PayloadType> for u16 {
         match value {
             PayloadType::GraphQL => 0,
             PayloadType::UDP => 1,
+            PayloadType::UDPDlStream => 2,
             PayloadType::Unknown(value) => value as u16,
         }
     }

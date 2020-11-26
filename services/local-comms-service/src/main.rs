@@ -143,12 +143,13 @@ fn main() -> LocalCommsServiceResult<()> {
     let telem = Arc::new(Mutex::new(CommsTelemetry::default()));
 
     // Start communication service.
-    CommsService::start::<Arc<Mutex<LocalComms>>, SpacePacket>(controls, &telem).map_err(
-        |err| {
-            error!("Failed to start comms service: {:?}", err);
-            err
-        },
-    )?;
+    CommsService::start::<Arc<Mutex<LocalComms>>, Arc<Mutex<LocalComms>>, SpacePacket>(
+        controls, &telem,
+    )
+    .map_err(|err| {
+        error!("Failed to start comms service: {:?}", err);
+        err
+    })?;
 
     // We will eventually start the GraphQL service here.
     loop {

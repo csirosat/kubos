@@ -296,6 +296,49 @@ fn read_thread<
                     })
                     .unwrap();
             }
+            PayloadType::UDPDlStream => {
+                if let Ok(mut num_handlers) = num_handlers.lock() {
+                    if *num_handlers >= comms.max_num_handlers {
+                        log_error(&data, CommsServiceError::NoAvailablePorts.to_string()).unwrap();
+                        error!("No message handler ports available");
+                        continue;
+                    } else {
+                        *num_handlers += 1;
+                    }
+                }
+
+                // Spawn new message handler.
+                let conn_ref = comms.write_conn.clone();
+                let write_ref = comms.write[0].clone();
+                let data_ref = data.clone();
+                let sat_ref = comms.ip;
+                let time_ref = comms.timeout * 10;
+                let num_handlers_ref = num_handlers.clone();
+                thread::Builder::new()
+                    .stack_size(16 * 1024)
+                    .spawn(move || {
+                        let res = handle_udp_dl_stream_request(
+                            conn_ref, &write_ref, packet, time_ref, sat_ref,
+                        );
+
+                        if let Ok(mut num_handlers) = num_handlers_ref.lock() {
+                            *num_handlers -= 1;
+                        }
+
+                        match res {
+                            Ok(_) => {
+                                log_telemetry(&data_ref, &TelemType::Down).unwrap();
+                                info!("UDP DL Stream Completed");
+                            }
+                            Err(e) => {
+                                log_telemetry(&data_ref, &TelemType::DownFailed).unwrap();
+                                log_error(&data_ref, e.to_string()).unwrap();
+                                error!("UDP Dl Stream Error: {}", e.to_string());
+                            }
+                        }
+                    })
+                    .unwrap();
+            }
         }
     }
 }
@@ -333,6 +376,46 @@ fn handle_graphql_request<WriteConnection: Clone, Packet: LinkPacket>(
 
     // Write packet to the gateway
     write(&write_conn.clone(), &packet).map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[allow(clippy::boxed_local)]
+fn handle_udp_dl_stream_request<WriteConnection: Clone, Packet: LinkPacket>(
+    write_conn: WriteConnection,
+    write: &Arc<WriteFn<WriteConnection>>,
+    message: Box<Packet>,
+    timeout: u64,
+    sat_ip: Ipv4Addr,
+) -> Result<(), String> {
+    use std::time::Duration;
+
+    let socket = UdpSocket::bind((sat_ip, 0)).map_err(|e| e.to_string())?;
+
+    socket
+        .set_read_timeout(Some(Duration::from_millis(timeout)))
+        .map_err(|e| e.to_string())?;
+
+    socket
+        .send_to(&message.payload(), (sat_ip, message.destination()))
+        .map_err(|e| e.to_string())?;
+
+    let mut buf = [0; 4 * 1024];
+
+    while let Ok((size, _addr)) = socket.recv_from(&mut buf) {
+        // Take received message and wrap it in a LinkPacket
+        let packet = Packet::build(
+            message.command_id(),
+            PayloadType::UDPDlStream,
+            0,
+            &buf[0..size],
+        )
+        .and_then(|packet| packet.to_bytes())
+        .map_err(|e| e.to_string())?;
+
+        // Write packet to the gateway
+        write(&write_conn.clone(), &packet).map_err(|e| e.to_string())?;
+    }
 
     Ok(())
 }
@@ -382,7 +465,7 @@ fn downlink_endpoint<ReadConnection: Clone, WriteConnection: Clone, Packet: Link
         // Take received message and wrap it in a Link packet.
         // Setting port to 0 because we don't know the ground port...
         // That is known by the ground comms service
-        let packet = match Packet::build(0, PayloadType::UDP, 0, &buf[0..size])
+        let packet = match Packet::build(0, PayloadType::UDP, port, &buf[0..size])
             .and_then(|packet| packet.to_bytes())
         {
             Ok(packet) => packet,
