@@ -502,7 +502,7 @@ impl Protocol {
 
                     message
                 }
-                Err(ProtocolError::ReceiveTimeout) => match dbg!(state.clone()) {
+                Err(ProtocolError::ReceiveTimeout) => match state.clone() {
                     State::Receiving {
                         channel_id,
                         hash,
@@ -656,7 +656,13 @@ impl Protocol {
                     }
                     Message::Metadata(channel_id, hash, num_chunks) => {
                         info!("<- {{ {}, {}, {} }}", channel_id, hash, num_chunks);
-                        storage::store_meta(&self.config.storage_prefix, &hash, *num_chunks)?;
+                        storage::store_meta(
+                            &self.config.storage_prefix,
+                            &hash,
+                            *num_chunks,
+                            None,
+                            None,
+                        )?;
                         new_state = State::StartReceive {
                             path: hash.to_owned(),
                         };

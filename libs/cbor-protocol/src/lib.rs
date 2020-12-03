@@ -447,7 +447,7 @@ impl Protocol {
                         err: format!("{:?}", err),
                     })?;
 
-                if message.is_array() {
+                if let serde_cbor::Value::Array(_) = message {
                     message
                 } else {
                     return Err(ProtocolError::ParseFail {

@@ -18,9 +18,10 @@ use crate::error::ProtocolError;
 use blake2_rfc::blake2s::Blake2s;
 use log::warn;
 use serde_cbor::{de, to_vec, Value};
-use std::fs;
 use std::fs::File;
 use std::fs::Permissions;
+use std::io::Seek;
+use std::io::SeekFrom;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::fs::MetadataExt;
 use std::os::unix::fs::PermissionsExt;
@@ -28,6 +29,7 @@ use std::path::Path;
 use std::str;
 use std::thread;
 use std::time::Duration;
+use std::{fmt::format, fs};
 use time;
 
 const HASH_SIZE: usize = 16;
@@ -60,8 +62,25 @@ pub fn store_chunk(prefix: &str, hash: &str, index: u32, data: &[u8]) -> Result<
     Ok(())
 }
 
-pub fn store_meta(prefix: &str, hash: &str, num_chunks: u32) -> Result<(), ProtocolError> {
-    let data = vec![("num_chunks", num_chunks)];
+#[derive(serde::Serialize, serde::Deserialize)]
+struct Meta {
+    num_chunks: u32,
+    chunk_size: Option<u64>,
+    file_path: Option<String>,
+}
+
+pub fn store_meta(
+    prefix: &str,
+    hash: &str,
+    num_chunks: u32,
+    chunk_size: Option<u64>,
+    file_path: Option<&str>,
+) -> Result<(), ProtocolError> {
+    let data = Meta {
+        num_chunks,
+        chunk_size,
+        file_path: file_path.map(|f| f.to_owned()),
+    };
 
     let vec = to_vec(&data)?;
 
@@ -99,26 +118,52 @@ pub fn store_meta(prefix: &str, hash: &str, num_chunks: u32) -> Result<(), Proto
 // Load a chunk from its temporary storage file
 pub fn load_chunk(prefix: &str, hash: &str, index: u32) -> Result<Vec<u8>, ProtocolError> {
     let mut data = vec![];
-    let path = Path::new(&format!("{}/storage", prefix))
-        .join(hash)
-        .join(format!("{}", index));
+    if let (_, Some(chunk_size), Some(path)) = load_meta(prefix, hash)? {
+        // let path = Path::new(&format!("{}/storage", prefix))
+        //     .join(hash)
+        //     .join(format!("{}", index));
 
-    File::open(path)
-        .map_err(|err| ProtocolError::StorageError {
+        let mut file = File::open(&path).map_err(|err| ProtocolError::StorageError {
             action: format!("open chunk file {}", index),
-            err,
-        })?
-        .read_to_end(&mut data)
-        .map_err(|err| ProtocolError::StorageError {
-            action: format!("read chunk file {}", index),
             err,
         })?;
 
+        file.seek(SeekFrom::Start(chunk_size * index as u64))
+            .map_err(|err| ProtocolError::StorageError {
+                action: format!("seek to chunk in file {}", &path),
+                err,
+            })?;
+
+        file.take(chunk_size)
+            .read_to_end(&mut data)
+            .map_err(|err| ProtocolError::StorageError {
+                action: format!("read chunk file {}", index),
+                err,
+            })?;
+    } else {
+        let path = Path::new(&format!("{}/storage", prefix))
+            .join(hash)
+            .join(format!("{}", index));
+
+        File::open(path)
+            .map_err(|err| ProtocolError::StorageError {
+                action: format!("open chunk file {}", index),
+                err,
+            })?
+            .read_to_end(&mut data)
+            .map_err(|err| ProtocolError::StorageError {
+                action: format!("read chunk file {}", index),
+                err,
+            })?;
+    }
     Ok(data)
 }
 
 // Load number of chunks in file from metadata
-pub fn load_meta(prefix: &str, hash: &str) -> Result<u32, ProtocolError> {
+pub fn load_meta(
+    prefix: &str,
+    hash: &str,
+) -> Result<(u32, Option<u64>, Option<String>), ProtocolError> {
     let mut data = vec![];
     let meta_path = Path::new(&format!("{}/storage", prefix))
         .join(hash)
@@ -135,33 +180,11 @@ pub fn load_meta(prefix: &str, hash: &str) -> Result<u32, ProtocolError> {
             err,
         })?;
 
-    let metadata: Value = de::from_slice(&data).map_err(|err| {
+    let metadata: Meta = de::from_slice(&data).map_err(|err| {
         ProtocolError::StorageParseError(format!("Unable to parse metadata for {}: {}", hash, err))
     })?;
 
-    // Returned data should be CBOR: '[["num_chunks", value]]'
-    let num_chunks = metadata
-        .as_array()
-        .and_then(|data| data[0].as_array())
-        .and_then(|data| {
-            let mut entries = data.iter();
-
-            entries
-                .next()
-                .and_then(|val| val.as_string())
-                .and_then(|key| {
-                    if key == "num_chunks" {
-                        entries.next().and_then(|val| val.as_u64())
-                    } else {
-                        None
-                    }
-                })
-        })
-        .ok_or_else(|| {
-            ProtocolError::StorageParseError("Failed to parse temporary file's metadata".to_owned())
-        })?;
-
-    Ok(num_chunks as u32)
+    Ok((metadata.num_chunks, metadata.chunk_size, metadata.file_path))
 }
 
 // Check if all of a files chunks are present in the temporary directory
@@ -171,10 +194,11 @@ pub fn validate_file(
     num_chunks: Option<u32>,
 ) -> Result<(bool, Vec<u32>), ProtocolError> {
     let num_chunks = if let Some(num) = num_chunks {
-        store_meta(prefix, hash, num)?;
+        store_meta(prefix, hash, num, None, None)?;
         num
     } else {
-        load_meta(prefix, hash)?
+        let (num, ..) = load_meta(prefix, hash)?;
+        num
     };
 
     let mut missing_ranges: Vec<u32> = vec![];
@@ -263,7 +287,7 @@ pub fn initialize_file(
     let storage_path = format!("{}/storage", prefix);
 
     // Confirm file exists
-    fs::metadata(source_path).map_err(|err| ProtocolError::StorageError {
+    let metadata = fs::metadata(source_path).map_err(|err| ProtocolError::StorageError {
         action: format!("stat file {}", source_path),
         err,
     })?;
@@ -274,45 +298,20 @@ pub fn initialize_file(
         err,
     })?;
 
-    // Create a temp copy of the file to use for hashing and chunking
-    let temp_path = Path::new(&storage_path).join(format!(".{}", time::get_time().nsec));
-    fs::copy(&source_path, &temp_path).map_err(|err| ProtocolError::StorageError {
-        action: format!("copy {:?} to temp file {:?}", source_path, temp_path),
-        err,
-    })?;
-
     // Calculate hash of temp file
     let hash = calc_file_hash(&source_path, hash_chunk_size)?;
 
-    // Chunk and store temp file into hash directory
-    let mut output = File::open(&temp_path).map_err(|err| ProtocolError::StorageError {
-        action: format!("open temp file {:?}", temp_path),
-        err,
-    })?;
-    let mut index = 0;
-    loop {
-        let mut chunk = vec![0u8; transfer_chunk_size];
-        match output.read(&mut chunk) {
-            Ok(n) => {
-                if n == 0 {
-                    break;
-                }
-                store_chunk(prefix, &hash, index, &chunk[0..n])?;
-                index += 1;
-            }
-            Err(e) => {
-                return Err(ProtocolError::StorageError {
-                    action: format!("read chunk from temp {:?}", temp_path),
-                    err: e,
-                });
-            }
-        }
-    }
-    store_meta(prefix, &hash, index)?;
-    match fs::remove_file(&temp_path) {
-        Ok(_) => {}
-        Err(e) => warn!("Failed to remove temp file {:?} : {}", temp_path, e),
-    }
+    let file_size = metadata.len() as u64;
+    let index = (file_size / transfer_chunk_size as u64) as u32
+        + ((file_size % transfer_chunk_size as u64) > 0) as u32;
+
+    store_meta(
+        prefix,
+        &hash,
+        index,
+        Some(transfer_chunk_size as u64),
+        Some(&source_path),
+    )?;
 
     if let Ok(meta) = fs::metadata(source_path) {
         Ok((hash, index, meta.mode()))
@@ -339,7 +338,7 @@ pub fn finalize_file(
     }
 
     // Get the total number of chunks we're saving
-    let num_chunks = load_meta(prefix, hash)?;
+    let (num_chunks, _, _) = load_meta(prefix, hash)?;
 
     // Q: Do we want to create the parent directories if they don't exist?
     let mut file = File::create(target_path).map_err(|err| ProtocolError::StorageError {
