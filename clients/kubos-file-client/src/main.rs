@@ -42,6 +42,8 @@ fn upload(
     // Tell our destination the hash and number of chunks to expect
     protocol_instance.send_metadata(channel, &hash, num_chunks)?;
 
+    std::thread::sleep(Duration::from_millis(200));
+
     // Send export command for file
     protocol_instance.send_export(channel, &hash, &target_path, mode)?;
 
