@@ -437,7 +437,7 @@ fn calc_file_hash(path: &str, hash_chunk_size: usize) -> Result<String, Protocol
         action: format!("open {:?}", path),
         err,
     })?;
-    let mut reader = BufReader::with_capacity(hash_chunk_size, input);
+    let mut reader = BufReader::with_capacity(hash_chunk_size * 8, input);
 
     // Need to bring in blake2fs here to create hash
     loop {
@@ -455,7 +455,7 @@ fn calc_file_hash(path: &str, hash_chunk_size: usize) -> Result<String, Protocol
             chunk.len()
         };
         reader.consume(length);
-        thread::sleep(Duration::from_millis(2));
+        // thread::sleep(Duration::from_millis(2));
     }
 
     Ok(hasher

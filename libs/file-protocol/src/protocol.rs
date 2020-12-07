@@ -106,6 +106,17 @@ pub enum State {
         /// File mode
         mode: Option<u32>,
     },
+    /// TODO
+    StartTrasmitting {
+        /// TODO
+        channel_id: u32,
+        /// TODO
+        hash: String,
+        /// TODO
+        num_chunks: u32,
+        /// TODO
+        mode: u32,
+    },
     /// Currenty transmitting a file
     Transmitting,
     /// All file chunks have been transmitted
@@ -572,6 +583,23 @@ impl Protocol {
                                 }
                             }
                         } else {
+                            match prev_state.as_ref() {
+                                State::StartTrasmitting {
+                                    channel_id,
+                                    hash,
+                                    num_chunks,
+                                    mode,
+                                } => {
+                                    self.send(&messages::import_setup_success(
+                                        *channel_id,
+                                        &hash,
+                                        num_chunks.to_owned(),
+                                        mode.to_owned(),
+                                    )?)?;
+                                }
+                                _ => {}
+                            };
+
                             state = State::Holding {
                                 count: count + 1,
                                 prev_state,
@@ -749,7 +777,12 @@ impl Protocol {
                                     mode,
                                 )?)?;
 
-                                new_state = State::Transmitting;
+                                new_state = State::StartTrasmitting {
+                                    channel_id: channel_id.to_owned(),
+                                    hash,
+                                    num_chunks,
+                                    mode,
+                                };
                             }
                             Err(error) => {
                                 // It failed. Let the requester know that we can't transmit

@@ -74,10 +74,11 @@ fn download(
     protocol_instance.send_import(channel, source_path)?;
 
     // Wait for the request reply.
-    // Note/TODO: We don't use a timeout here because we don't know how long it will
-    // take the server to prepare the file we've requested.
-    // Larger files (> 100MB) can take over a minute to process.
-    let reply = match protocol_instance.recv(None) {
+    // (out of date) Note/TODO: We don't use a timeout here because we don't know how long it will
+    // (out of date) take the server to prepare the file we've requested.
+    // (out of date) Larger files (> 100MB) can take over a minute to process.
+    // Set timeout to 10m as this is the duration of a pass, and we want to timeout before the next pass.
+    let reply = match protocol_instance.recv(Some(Duration::from_secs(10 * 60))) {
         Ok(message) => message,
         Err(error) => bail!("Failed to import file: {}", error),
     };
