@@ -10,3 +10,5 @@ export    CXX=$TOOLCHAINS/buildroot/host/bin/arm-buildroot-uclinux-uclibcgnueabi
 export FLTHDR=$TOOLCHAINS/buildroot/host/bin/arm-buildroot-uclinux-uclibcgnueabi-flthdr
 export XARGO_RUST_SRC=$DEPS/rust/src
 
+echo "Environment Configured Successfully"
+
