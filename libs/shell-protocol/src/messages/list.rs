@@ -26,17 +26,34 @@ pub fn from_cbor(message: &ChannelMessage) -> Result<Message, ProtocolError> {
     let mut process_list: Option<HashMap<u32, (String, u32)>> = None;
 
     // Parse out options
-    if let Some(Value::Object(raw_list)) = message.payload.get(0) {
+    if let Some(Value::Map(raw_list)) = message.payload.get(0) {
         process_list = Some(
             raw_list
                 .iter()
                 // Map and filter on channel and path/pid array as Some
-                .map(|(channel, data)| (channel.as_u64(), data.as_array()))
+                .map(|(channel, data)| {
+                    (
+                        match channel {
+                            Value::Integer(c) => Some(c.to_owned() as u64),
+                            _ => None,
+                        },
+                        match data {
+                            Value::Array(v) => Some(v),
+                            _ => None,
+                        },
+                    )
+                })
                 .filter(|(channel, data)| channel.is_some() && data.is_some())
                 // Extract path/pid
                 .map(|(channel, data)| {
-                    let path = data.unwrap().get(0).and_then(|v| v.as_string());
-                    let pid = data.unwrap().get(1).and_then(|v| v.as_u64());
+                    let path = data.unwrap().get(0).and_then(|v| match v {
+                        Value::Text(s) => Some(s),
+                        _ => None,
+                    });
+                    let pid = data.unwrap().get(1).and_then(|v| match v {
+                        Value::Integer(i) => Some(i),
+                        _ => None,
+                    });
                     (channel, path, pid)
                 })
                 // Check if path/pid are Some
@@ -45,7 +62,7 @@ pub fn from_cbor(message: &ChannelMessage) -> Result<Message, ProtocolError> {
                 .map(|(channel, path, pid)| {
                     (
                         channel.unwrap() as u32,
-                        (path.unwrap().to_owned(), pid.unwrap() as u32),
+                        (path.unwrap().to_owned(), pid.unwrap().to_owned() as u32),
                     )
                 })
                 .collect::<HashMap<u32, (String, u32)>>(),

@@ -23,7 +23,7 @@ use serde_cbor::ser;
 /// CBOR -> Message::Exit
 pub fn from_cbor(message: &ChannelMessage) -> Result<Message, ProtocolError> {
     let code = *(match message.payload.get(0) {
-        Some(Value::U64(data)) => data,
+        Some(Value::Integer(data)) => data,
         _ => {
             return Err(ProtocolError::MessageParseError {
                 err: "No exit code found".to_owned(),
@@ -32,7 +32,7 @@ pub fn from_cbor(message: &ChannelMessage) -> Result<Message, ProtocolError> {
     }) as u32;
 
     let signal = *(match message.payload.get(1) {
-        Some(Value::U64(data)) => data,
+        Some(Value::Integer(data)) => data,
         _ => {
             return Err(ProtocolError::MessageParseError {
                 err: "No exit signal found".to_owned(),

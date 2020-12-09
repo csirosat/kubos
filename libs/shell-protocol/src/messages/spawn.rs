@@ -18,7 +18,7 @@ use super::*;
 use crate::error::ProtocolError;
 use channel_protocol::ChannelMessage;
 use log::info;
-use serde_cbor::{ser, ObjectKey};
+use serde_cbor::ser;
 use std::collections::BTreeMap;
 
 /// CBOR -> Message::Spawn
@@ -26,7 +26,7 @@ pub fn from_cbor(message: &ChannelMessage) -> Result<Message, ProtocolError> {
     let mut args: Option<Vec<String>> = None;
 
     let command = match message.payload.get(0) {
-        Some(Value::String(command)) => command,
+        Some(Value::Text(command)) => command,
         _ => {
             return Err(ProtocolError::MessageParseError {
                 err: "No spawn command found".to_owned(),
@@ -35,13 +35,16 @@ pub fn from_cbor(message: &ChannelMessage) -> Result<Message, ProtocolError> {
     };
 
     // Parse out options
-    if let Some(Value::Object(raw_options)) = message.payload.get(1) {
+    if let Some(Value::Map(raw_options)) = message.payload.get(1) {
         // Parse out command arguments
-        args = match raw_options.get(&ObjectKey::String("args".to_owned())) {
+        args = match raw_options.get(&Value::Text("args".to_owned())) {
             Some(Value::Array(args)) => Some(
                 args.to_vec()
                     .iter()
-                    .filter_map(|s| s.as_string())
+                    .filter_map(|s| match s {
+                        Value::Text(t) => Some(t),
+                        _ => None,
+                    })
                     .map(|s| s.to_owned())
                     .collect(),
             ),
@@ -68,9 +71,9 @@ pub fn to_cbor(
         let args_vec = args
             .to_vec()
             .iter()
-            .map(|s| Value::String(s.to_owned()))
+            .map(|s| Value::Text(s.to_owned()))
             .collect();
-        options.insert(ObjectKey::String("args".to_owned()), Value::Array(args_vec));
+        options.insert(Value::Text("args".to_owned()), Value::Array(args_vec));
     }
 
     Ok(

@@ -38,7 +38,7 @@ pub fn parse_channel_id(message: &Value) -> Result<u32, ProtocolError> {
         })?
         .to_owned();
 
-    if let Value::U64(channel_id) = first_param {
+    if let Value::Integer(channel_id) = first_param {
         Ok(channel_id as u32)
     } else {
         Err(ProtocolError::MessageParseError {
@@ -58,7 +58,7 @@ pub fn parse_message(message: Value) -> Result<Message, ProtocolError> {
         }
     };
     let channel_id = *(match data.get(0) {
-        Some(Value::U64(channel_id)) => channel_id,
+        Some(Value::Integer(channel_id)) => channel_id,
         _ => {
             return Err(ProtocolError::MessageParseError {
                 err: "No channel ID found".to_owned(),
@@ -66,7 +66,7 @@ pub fn parse_message(message: Value) -> Result<Message, ProtocolError> {
         }
     }) as u32;
     let name = match data.get(1) {
-        Some(Value::String(name)) => name,
+        Some(Value::Text(name)) => name,
         _ => {
             return Err(ProtocolError::MessageParseError {
                 err: "No message name found".to_owned(),
@@ -104,8 +104,8 @@ mod tests {
         assert_eq!(message.payload.len(), 2);
         assert_eq!(
             message.payload.get(0),
-            Some(&Value::String("data".to_owned()))
+            Some(&Value::Text("data".to_owned()))
         );
-        assert_eq!(message.payload.get(1), Some(&Value::U64(12)));
+        assert_eq!(message.payload.get(1), Some(&Value::Integer(12)));
     }
 }

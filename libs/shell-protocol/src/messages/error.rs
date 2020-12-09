@@ -23,7 +23,7 @@ use serde_cbor::ser;
 /// CBOR -> Message::Error
 pub fn from_cbor(message: &ChannelMessage) -> Result<Message, ProtocolError> {
     let data = match message.payload.get(0) {
-        Some(Value::String(data)) => data,
+        Some(Value::Text(data)) => data,
         _ => {
             return Err(ProtocolError::MessageParseError {
                 err: "No message found".to_owned(),

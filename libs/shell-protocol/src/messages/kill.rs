@@ -25,8 +25,11 @@ pub fn from_cbor(message: &ChannelMessage) -> Result<Message, ProtocolError> {
     let signal: Option<u32> = message
         .payload
         .get(0)
-        .and_then(|v| v.as_u64())
-        .map(|n| n as u32);
+        .and_then(|v| match v {
+            Value::Integer(v) => Some(v),
+            _ => None,
+        })
+        .map(|n| *n as u32);
 
     Ok(Message::Kill {
         channel_id: message.channel_id,

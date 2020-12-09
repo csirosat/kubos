@@ -23,7 +23,7 @@ use serde_cbor::ser;
 /// CBOR -> Message::Pid
 pub fn from_cbor(message: &ChannelMessage) -> Result<Message, ProtocolError> {
     let data = *(match message.payload.get(0) {
-        Some(Value::U64(data)) => data,
+        Some(Value::Integer(data)) => data,
         _ => {
             return Err(ProtocolError::MessageParseError {
                 err: "No pid found".to_owned(),

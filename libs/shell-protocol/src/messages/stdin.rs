@@ -22,7 +22,7 @@ use serde_cbor::ser;
 
 /// CBOR -> Message::Stdin
 pub fn from_cbor(message: &ChannelMessage) -> Result<Message, ProtocolError> {
-    if let Some(Value::String(data)) = message.payload.get(0) {
+    if let Some(Value::Text(data)) = message.payload.get(0) {
         Ok(Message::Stdin {
             channel_id: message.channel_id,
             data: Some(data.to_owned()),
