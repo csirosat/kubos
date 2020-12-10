@@ -21,6 +21,8 @@
 extern crate diesel;
 
 pub mod models;
+use std::path::PathBuf;
+
 pub use crate::models::*;
 
 use diesel::dsl::sql;
@@ -48,6 +50,13 @@ impl Database {
     pub fn new(path: &str) -> Self {
         if !::std::path::Path::new(path).exists() {
             info!("Creating database {}", path);
+            let path = PathBuf::from(&path);
+            let p = if path.is_dir() {
+                path.parent().unwrap()
+            } else {
+                &path
+            };
+            std::fs::create_dir_all(p).unwrap();
         }
         info!("Return database");
         Database {
