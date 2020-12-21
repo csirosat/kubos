@@ -51,7 +51,7 @@ impl Database {
         if !::std::path::Path::new(path).exists() {
             info!("Creating database {}", path);
             let path = PathBuf::from(&path);
-            let p = if path.is_dir() {
+            let p = if !path.is_dir() {
                 path.parent().unwrap()
             } else {
                 &path
