@@ -156,6 +156,10 @@ impl LinkPacket for SpacePacket {
     fn destination(&self) -> u16 {
         self.secondary_header.destination_port
     }
+
+    fn max_size() -> usize {
+        8 * 1024
+    }
 }
 
 #[cfg(test)]
