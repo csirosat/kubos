@@ -223,7 +223,7 @@ fn read_thread<
 
         // Update number of packets up.
         log_telemetry(&data, &TelemType::Up).unwrap();
-        info!("Packet successfully uplinked");
+        // info!("Packet successfully uplinked");
 
         // Check link type for appropriate message handling path
         match packet.payload_type() {
@@ -239,20 +239,22 @@ fn read_thread<
                 let sat_ref = comms.ip;
                 let data_ref = data.clone();
 
-                thread::Builder::new()
-                    .stack_size(16 * 1024)
-                    .spawn(move || match handle_udp_passthrough(packet, sat_ref) {
-                        Ok(_) => {
-                            log_telemetry(&data_ref, &TelemType::Down).unwrap();
-                            info!("UDP Packet successfully uplinked");
-                        }
-                        Err(e) => {
-                            log_telemetry(&data_ref, &TelemType::DownFailed).unwrap();
-                            log_error(&data_ref, e.to_string()).unwrap();
-                            error!("UDP packet failed to uplink: {}", e.to_string());
-                        }
-                    })
-                    .unwrap();
+                //                 thread::Builder::new()
+                //                     .stack_size(16 * 1024)
+                //                     .spawn(move ||
+                match handle_udp_passthrough(packet, sat_ref) {
+                    Ok(_) => {
+                        log_telemetry(&data_ref, &TelemType::Down).unwrap();
+                        // info!("UDP Packet successfully uplinked");
+                    }
+                    Err(e) => {
+                        log_telemetry(&data_ref, &TelemType::DownFailed).unwrap();
+                        log_error(&data_ref, e.to_string()).unwrap();
+                        error!("UDP packet failed to uplink: {}", e.to_string());
+                    }
+                }
+                //                     })
+                //                     .unwrap();
             }
             PayloadType::GraphQL => {
                 if let Ok(mut num_handlers) = num_handlers.lock() {
@@ -450,9 +452,8 @@ fn downlink_endpoint<ReadConnection: Clone, WriteConnection: Clone, Packet: Link
         Err(e) => return log_error(&data, e.to_string()).unwrap(),
     };
 
+    let mut buf = vec![0; Packet::max_size()];
     loop {
-        let mut buf = vec![0; Packet::max_size()];
-
         // Indefinitely wait for a message from any application or service.
         let (size, _address) = match socket.recv_from(&mut buf) {
             Ok(tuple) => tuple,
@@ -479,7 +480,7 @@ fn downlink_endpoint<ReadConnection: Clone, WriteConnection: Clone, Packet: Link
         match write(&write_conn.clone(), &packet) {
             Ok(_) => {
                 log_telemetry(&data, &TelemType::Down).unwrap();
-                info!("Packet successfully downlinked");
+                // info!("Packet successfully downlinked");
             }
             Err(e) => {
                 log_telemetry(&data, &TelemType::DownFailed).unwrap();
