@@ -32,7 +32,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use tar;
 
-type Context = kubos_service::Context<Subsystem>;
+pub type Context = kubos_service::Context<Subsystem>;
 
 #[derive(Clone)]
 pub struct Subsystem {
@@ -58,25 +58,29 @@ impl Subsystem {
 #[derive(Serialize)]
 pub struct Entry(kubos_telemetry_db::Entry);
 
-graphql_object!(Entry: () |&self| {
-    description: "A telemetry entry"
-
-    field timestamp() -> f64 as "Timestamp" {
+#[juniper::object]
+/// A telemetry entry
+impl Entry {
+    /// Timestamp
+    fn timestamp(&self) -> f64 {
         self.0.timestamp as f64
     }
-
-    field subsystem() -> &String as "Subsystem name" {
+    /// Subsystem name
+    fn subsystem(&self) -> &str {
         &self.0.subsystem
     }
-
-    field parameter() -> &String as "Telemetry parameter" {
+    /// Telemetry parameter
+    fn parameter(&self) -> &str {
         &self.0.parameter
     }
-
-    field value() -> String as "Telemetry value" {
-        serde_cbor::from_slice::<serde_cbor::Value>(&self.0.value).ok().and_then(|value| serde_json::to_string(&value).ok()).unwrap_or(String::from(""))
+    /// Telemetry value
+    fn value(&self) -> String {
+        serde_cbor::from_slice::<serde_cbor::Value>(&self.0.value)
+            .ok()
+            .and_then(|value| serde_json::to_string(&value).ok())
+            .unwrap_or(String::from(""))
     }
-});
+}
 
 fn query_db(
     database: &Arc<Mutex<kubos_telemetry_db::Database>>,
@@ -138,42 +142,60 @@ fn query_db(
 
 pub struct QueryRoot;
 
-graphql_object!(QueryRoot: Context |&self| {
+#[juniper::object(Context = Context)]
+impl QueryRoot {
     // Test query to verify service is running without
     // attempting to execute any actual logic
     //
     // {
     //    ping: "pong"
     // }
-    field ping() -> FieldResult<String>
-        as "Test service query"
-    {
+    /// Test service query
+    fn ping() -> FieldResult<String> {
         Ok(String::from("pong"))
     }
 
-    field telemetry(
-        &executor,
+    /// Telemetry entries in database
+    fn telemetry(
+        context: &Context,
         timestamp_ge: Option<f64>,
         timestamp_le: Option<f64>,
         subsystem: Option<String>,
         parameter: Option<String>,
         parameters: Option<Vec<String>>,
         limit: Option<i32>,
-    ) -> FieldResult<Vec<Entry>>
-        as "Telemetry entries in database"
-    {
+    ) -> FieldResult<Vec<Entry>> {
         if parameter.is_some() && parameters.is_some() {
-            return Err(FieldError::new("The `parameter` and `parameters` input fields are mutually exclusive", Value::null()));
+            return Err(FieldError::new(
+                "The `parameter` and `parameters` input fields are mutually exclusive",
+                Value::null(),
+            ));
         }
 
         if let Some(param) = parameter {
-            query_db(&executor.context().subsystem().database, timestamp_ge, timestamp_le, subsystem, Some(vec!(param)), limit)
+            query_db(
+                &context.subsystem().database,
+                timestamp_ge,
+                timestamp_le,
+                subsystem,
+                Some(vec![param]),
+                limit,
+            )
         } else {
-            query_db(&executor.context().subsystem().database, timestamp_ge, timestamp_le, subsystem, parameters, limit)
+            query_db(
+                &context.subsystem().database,
+                timestamp_ge,
+                timestamp_le,
+                subsystem,
+                parameters,
+                limit,
+            )
         }
     }
-    field routed_telemetry(
-        &executor,
+
+    /// Telemetry entries in database
+    fn routed_telemetry(
+        context: &Context,
         timestamp_ge: Option<f64>,
         timestamp_le: Option<f64>,
         subsystem: Option<String>,
@@ -181,28 +203,46 @@ graphql_object!(QueryRoot: Context |&self| {
         parameters: Option<Vec<String>>,
         limit: Option<i32>,
         output: String,
-        compress = true: bool,
-    ) -> FieldResult<String>
-        as "Telemetry entries in database"
-    {
+        compress: bool,
+    ) -> FieldResult<String> {
         if parameter.is_some() && parameters.is_some() {
-            return Err(FieldError::new("The `parameter` and `parameters` input fields are mutually exclusive", Value::null()));
+            return Err(FieldError::new(
+                "The `parameter` and `parameters` input fields are mutually exclusive",
+                Value::null(),
+            ));
         }
 
         let entries = if let Some(param) = parameter {
-            query_db(&executor.context().subsystem().database, timestamp_ge, timestamp_le, subsystem, Some(vec!(param)), limit)?
+            query_db(
+                &context.subsystem().database,
+                timestamp_ge,
+                timestamp_le,
+                subsystem,
+                Some(vec![param]),
+                limit,
+            )?
         } else {
-            query_db(&executor.context().subsystem().database, timestamp_ge, timestamp_le, subsystem, parameters, limit)?
+            query_db(
+                &context.subsystem().database,
+                timestamp_ge,
+                timestamp_le,
+                subsystem,
+                parameters,
+                limit,
+            )?
         };
 
-        let entries = serde_json::to_vec(&entries)?;
+        let entries = serde_cbor::to_vec(&entries)?;
 
         let output_str = output.clone();
         let output_path = Path::new(&output_str);
 
-        let file_name_raw = output_path.file_name()
+        let file_name_raw = output_path
+            .file_name()
             .ok_or_else(|| FieldError::new("Unable to parse output file name", Value::null()))?;
-        let file_name = file_name_raw.to_str().ok_or_else(|| FieldError::new("Unable to parse output file name to string", Value::null()))?;
+        let file_name = file_name_raw.to_str().ok_or_else(|| {
+            FieldError::new("Unable to parse output file name to string", Value::null())
+        })?;
 
         if let Some(parent) = output_path.parent() {
             fs::create_dir_all(parent)?;
@@ -228,7 +268,7 @@ graphql_object!(QueryRoot: Context |&self| {
             Ok(output)
         }
     }
-});
+}
 
 pub struct MutationRoot;
 
@@ -253,29 +293,47 @@ struct InsertEntry {
     value: String,
 }
 
-graphql_object!(MutationRoot: Context | &self | {
-    field insert(&executor, timestamp: Option<f64>, subsystem: String, parameter: String, value: String) -> FieldResult<InsertResponse> {
-        let value = match serde_json::from_str::<serde_json::Value>(value.as_str()).ok().and_then(|value| serde_cbor::to_vec(&value).ok()) {
+#[juniper::object(Context = Context)]
+impl MutationRoot {
+    fn insert(
+        context: &Context,
+        timestamp: Option<f64>,
+        subsystem: String,
+        parameter: String,
+        value: String,
+    ) -> FieldResult<InsertResponse> {
+        let value = match serde_json::from_str::<serde_json::Value>(value.as_str())
+            .ok()
+            .and_then(|value| serde_cbor::to_vec(&value).ok())
+        {
             Some(value) => value,
-            _=> {
-        return Ok(InsertResponse {
-            success: false,
-            errors: String::from("Could not convert betweek json and cbor"),
-        });
+            _ => {
+                return Ok(InsertResponse {
+                    success: false,
+                    errors: String::from("Could not convert betweek json and cbor"),
+                });
             }
         };
 
         let result = match timestamp {
-            Some(time) => executor.context().subsystem().database.lock().or_else(|err| {
+            Some(time) => context
+                .subsystem()
+                .database
+                .lock()
+                .or_else(|err| {
                     log::error!("insert - Failed to get lock on database: {:?}", err);
                     Err(err)
                 })?
-            .insert(time, &subsystem, &parameter, &value),
-            None => executor.context().subsystem().database.lock().or_else(|err| {
+                .insert(time, &subsystem, &parameter, &value),
+            None => context
+                .subsystem()
+                .database
+                .lock()
+                .or_else(|err| {
                     log::error!("insert - Failed to get lock on database: {:?}", err);
                     Err(err)
                 })?
-            .insert_systime(&subsystem, &parameter, &value),
+                .insert_systime(&subsystem, &parameter, &value),
         };
 
         Ok(InsertResponse {
@@ -287,12 +345,11 @@ graphql_object!(MutationRoot: Context | &self | {
         })
     }
 
-    field insert_bulk(
-        &executor,
+    fn insert_bulk(
+        context: &Context,
         timestamp: Option<f64>,
-        entries: Vec<InsertEntry>
-    ) -> FieldResult<InsertResponse>
-    {
+        entries: Vec<InsertEntry>,
+    ) -> FieldResult<InsertResponse> {
         let time = time::now_utc().to_timespec();
         let systime = time.sec as f64 + (f64::from(time.nsec) / 1_000_000_000.0);
 
@@ -300,9 +357,12 @@ graphql_object!(MutationRoot: Context | &self | {
         for entry in entries {
             let ts = entry.timestamp.or(timestamp).unwrap_or(systime);
 
-            let value = match serde_json::from_str::<serde_json::Value>(entry.value.as_str()).ok().and_then(|value| serde_cbor::to_vec(&value).ok()) {
+            let value = match serde_json::from_str::<serde_json::Value>(entry.value.as_str())
+                .ok()
+                .and_then(|value| serde_cbor::to_vec(&value).ok())
+            {
                 Some(value) => value,
-                _=> {
+                _ => {
                     return Ok(InsertResponse {
                         success: false,
                         errors: String::from("Could not convert betweek json and cbor"),
@@ -318,10 +378,15 @@ graphql_object!(MutationRoot: Context | &self | {
             });
         }
 
-        let result = executor.context().subsystem().database.lock().or_else(|err| {
-            log::error!("insert_bulk - Failed to get lock on database: {:?}", err);
-            Err(err)
-        })?.insert_bulk(new_entries);
+        let result = context
+            .subsystem()
+            .database
+            .lock()
+            .or_else(|err| {
+                log::error!("insert_bulk - Failed to get lock on database: {:?}", err);
+                Err(err)
+            })?
+            .insert_bulk(new_entries);
 
         Ok(InsertResponse {
             success: result.is_ok(),
@@ -332,19 +397,19 @@ graphql_object!(MutationRoot: Context | &self | {
         })
     }
 
-    field delete(
-        &executor,
+    fn delete(
+        context: &Context,
         timestamp_ge: Option<f64>,
         timestamp_le: Option<f64>,
         subsystem: Option<String>,
         parameter: Option<String>,
-    ) -> FieldResult<DeleteResponse>
-    {
-        use kubos_telemetry_db::telemetry::dsl;
-        use kubos_telemetry_db::telemetry;
+    ) -> FieldResult<DeleteResponse> {
         use diesel::sqlite::SqliteConnection;
+        use kubos_telemetry_db::telemetry;
+        use kubos_telemetry_db::telemetry::dsl;
 
-        let mut selection = diesel::delete(telemetry::table).into_boxed::<<SqliteConnection as Connection>::Backend>();
+        let mut selection = diesel::delete(telemetry::table)
+            .into_boxed::<<SqliteConnection as Connection>::Backend>();
 
         if let Some(sub) = subsystem {
             selection = selection.filter(dsl::subsystem.eq(sub));
@@ -362,22 +427,29 @@ graphql_object!(MutationRoot: Context | &self | {
             selection = selection.filter(dsl::timestamp.le(time_le));
         }
 
-        let result = selection.execute(&executor.context().subsystem().database.lock().or_else(|err| {
+        let result = selection.execute(
+            &context
+                .subsystem()
+                .database
+                .lock()
+                .or_else(|err| {
                     log::error!("delete - Failed to get lock on database: {:?}", err);
                     Err(err)
-                })?.connection);
+                })?
+                .connection,
+        );
 
         match result {
             Ok(num) => Ok(DeleteResponse {
-                    success: true,
-                    errors: "".to_owned(),
-                    entries_deleted: Some(num as i32),
-                }),
+                success: true,
+                errors: "".to_owned(),
+                entries_deleted: Some(num as i32),
+            }),
             Err(err) => Ok(DeleteResponse {
-                    success: false,
-                    errors: format!("{}", err),
-                    entries_deleted: None
-                }),
+                success: false,
+                errors: format!("{}", err),
+                entries_deleted: None,
+            }),
         }
     }
-});
+}

@@ -181,24 +181,11 @@ where
                         &Variables::new(),
                         &self.context,
                     ) {
-                        Ok((val, errs)) => {
-                            // let errs_msg : String = errs
-                            // 	.into_iter()
-                            // 	// .map(|x| serde_cbor::to_string(&x).unwrap())
-                            // 	.map(|x| serde_json::to_string(&x).unwrap())
-                            // 	.collect();
-
-                            // json!({
-                            //     "data": val,
-                            //     "errors": errs_msg})
-                            // .to_string()
-
-                            serde_cbor::to_vec(&CborGQLResponse {
-                                data: val,
-                                errors: errs,
-                            })
-                            .unwrap()
-                        }
+                        Ok((val, errs)) => serde_cbor::to_vec(&CborGQLResponse {
+                            data: val,
+                            errors: errs,
+                        })
+                        .unwrap(),
                         Err(e) => serde_cbor::to_vec(&CborGQLErrors { errors: e }).unwrap(),
                     };
                     if let Err(e) = socket.send_to(&resp, &peer) {
