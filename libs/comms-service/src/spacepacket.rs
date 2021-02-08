@@ -70,7 +70,7 @@ impl LinkPacket for SpacePacket {
                 app_proc_id: u16::from(payload_type),
                 sequence_flags: 0,
                 sequence_count: 0,
-                data_length: (payload.len() + 10) as u16,
+                data_length: (payload.len() + 10 - 1) as u16,
             },
             secondary_header: SecondaryHeader {
                 command_id,
