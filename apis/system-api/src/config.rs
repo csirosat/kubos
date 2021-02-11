@@ -23,7 +23,7 @@ use toml;
 use toml::Value;
 
 /// The default configuration file path
-pub static DEFAULT_PATH: &str = "/var/config/kubos-config.toml";
+pub static DEFAULT_PATH: &str = "/usr/local/etc/kubos-config.toml";
 
 #[derive(Clone, Debug, Deserialize)]
 /// A simple address consisting of an IP address and port number
