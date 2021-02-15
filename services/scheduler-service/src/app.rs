@@ -18,16 +18,11 @@
 //! Definitions and functions for dealing with scheduled app execution
 //!
 
-use crate::error::SchedulerError;
 use crate::schema::GenericResponse;
 use juniper::GraphQLObject;
 use log::{error, info};
 // use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
-use serde_json::from_str;
-use std::collections::HashMap;
-use std::thread;
-use std::time::Duration;
 use tokio::process::Command;
 
 #[derive(Debug, Deserialize)]

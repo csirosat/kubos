@@ -31,7 +31,6 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use tokio::prelude::*;
 use tokio::runtime::Builder;
 use tokio::time::Duration;
 

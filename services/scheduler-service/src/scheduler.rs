@@ -32,8 +32,9 @@ use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-pub static DEFAULT_SCHEDULES_DIR: &str = "/home/system/etc/schedules";
-pub static SAFE_MODE: &str = "safe";
+#[allow(unused)]
+pub const DEFAULT_SCHEDULES_DIR: &str = "/home/system/etc/schedules";
+pub const SAFE_MODE: &str = "safe";
 
 // Handle to primitives controlling scheduler runtime context
 #[derive(Clone)]
@@ -57,6 +58,7 @@ pub struct Scheduler {
 
 impl Scheduler {
     // Create new Scheduler
+    #[allow(unused)]
     pub fn new(sched_dir: &str, app_service_url: &str) -> Result<Scheduler, SchedulerError> {
         // Convert sched_dir to an absolute path
         let sched_dir_path = Path::new(sched_dir);
@@ -87,6 +89,7 @@ impl Scheduler {
     }
 
     // Ensure that conditions are good for starting the scheduler
+    #[allow(unused)]
     pub fn init(&self) -> Result<(), SchedulerError> {
         if !Path::new(&self.scheduler_dir).is_dir() {
             if let Err(e) = fs::create_dir(&self.scheduler_dir) {

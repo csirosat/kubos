@@ -76,6 +76,7 @@ pub enum SchedulerError {
         path: String,
     },
     // An error was raised when sending a graphql query
+    #[allow(unused)]
     #[fail(display = "Scheduler query failed: {}", err)]
     QueryError {
         /// The error encountered
