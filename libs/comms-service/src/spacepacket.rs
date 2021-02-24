@@ -55,6 +55,11 @@ pub struct SpacePacket {
     payload: Vec<u8>,
 }
 
+#[cfg(not(feature = "uplink"))]
+const PACKET_TYPE: u8 = 0;
+#[cfg(feature = "uplink")]
+const PACKET_TYPE: u8 = 1;
+
 impl LinkPacket for SpacePacket {
     fn build(
         command_id: u64,
@@ -65,7 +70,7 @@ impl LinkPacket for SpacePacket {
         Ok(Box::new(SpacePacket {
             primary_header: PrimaryHeader {
                 version: 0,
-                packet_type: 0,
+                packet_type: PACKET_TYPE,
                 sec_header_flag: 0,
                 app_proc_id: u16::from(payload_type),
                 sequence_flags: 0,

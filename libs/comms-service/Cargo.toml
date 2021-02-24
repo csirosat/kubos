@@ -7,6 +7,7 @@ edition = "2018"
 [features]
 default = ["graphql"]
 graphql = ["juniper"]
+uplink = []
 
 [dependencies]
 byteorder = "1.2.7"
