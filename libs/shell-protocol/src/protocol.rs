@@ -19,8 +19,8 @@ use crate::messages;
 use crate::process::ProcessHandler;
 use channel_protocol::{ChannelMessage, ChannelProtocol};
 use log::{info, warn};
-use std::net::SocketAddr;
 use std::time::Duration;
+use std::{net::SocketAddr, time::Instant};
 
 /// Shell Service Protocol structure
 ///
@@ -68,6 +68,9 @@ impl Protocol {
     where
         F: Fn(Duration) -> Result<(ChannelMessage, SocketAddr), ProtocolError>,
     {
+        let mut stdout_string = String::new();
+        let mut stdout_last_sent = Instant::now();
+
         loop {
             {
                 let process = self.process.as_mut();
@@ -75,8 +78,12 @@ impl Protocol {
                 if process.stdout_reader.is_some() {
                     match process.read_stdout() {
                         Ok(Some(data)) => {
-                            self.channel_protocol
-                                .send(&messages::stdout::to_cbor(self.channel_id, Some(&data))?)?;
+                            // If this is the first bit of data we receive since emptying the
+                            // stdout then start the timer so we send this data soon...
+                            if stdout_string.is_empty() {
+                                stdout_last_sent = Instant::now();
+                            }
+                            stdout_string.push_str(&data);
                         }
                         Err(ProtocolError::ReadTimeout) => {}
                         _ => {
@@ -117,6 +124,17 @@ impl Protocol {
                         // If the process is done then we can exit this loop
                         return Ok(());
                     }
+                }
+
+                // If our timer expires then send all the stdout we've collected so far.
+                if stdout_last_sent.elapsed() > Duration::from_millis(333)
+                    && !stdout_string.is_empty()
+                {
+                    self.channel_protocol.send(&messages::stdout::to_cbor(
+                        self.channel_id,
+                        Some(&stdout_string),
+                    )?)?;
+                    stdout_string.clear();
                 }
             }
             // Check for new messages from the client
