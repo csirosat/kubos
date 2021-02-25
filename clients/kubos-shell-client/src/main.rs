@@ -142,7 +142,8 @@ fn kill_session(
 
 fn run_shell(channel_proto: &ChannelProtocol, channel_id: u32) -> Result<(), Error> {
     println!("Press enter to send input to the shell session");
-    println!("Press Control-D to detach from the session");
+    println!("Press Control-C to detach from the session");
+    println!("To close the session, call `exit`");
 
     let stdin = io::BufReader::new(timeout_readwrite::TimeoutReader::new(
         io::stdin(),
