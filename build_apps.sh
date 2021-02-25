@@ -9,7 +9,6 @@ source env.sh
 #cargo clean
 
 APPS="
-file-service
 scheduler-service
 shell-service
 telemetry-service
