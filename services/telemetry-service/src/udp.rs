@@ -14,26 +14,18 @@
 // limitations under the License.
 //
 
-use kubos_telemetry_db::Database;
+pub use flat_db::DataPoint;
+use flat_db::Database;
 use log::{error, info};
-use serde::Deserialize;
 use std::net::{SocketAddr, UdpSocket};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 pub struct DirectUdp {
-    db: Arc<Mutex<Database>>,
-}
-
-#[derive(Debug, Deserialize)]
-struct DataPoint {
-    timestamp: Option<f64>,
-    subsystem: String,
-    parameter: String,
-    value: Vec<u8>,
+    db: Arc<Database>,
 }
 
 impl DirectUdp {
-    pub fn new(db: Arc<Mutex<Database>>) -> Self {
+    pub fn new(db: Arc<Database>) -> Self {
         DirectUdp { db }
     }
 
@@ -64,15 +56,9 @@ impl DirectUdp {
                 .unwrap();
 
             if let Ok(val) = serde_cbor::from_slice::<DataPoint>(&buf[0..(size)]) {
-                if let Err(err) = self.process(&val) {
-                    error!("Error {:?} storing message {:?}", err, val);
-                }
+                self.db.insert(&[val]).unwrap();
             } else if let Ok(vec) = serde_cbor::from_slice::<Vec<DataPoint>>(&buf[0..(size)]) {
-                for val in vec.iter() {
-                    if let Err(err) = self.process(&val) {
-                        error!("Error {:?} storing message {:?}", err, val);
-                    }
-                }
+                self.db.insert(vec).unwrap();
             } else {
                 error!(
                     "Couldn't deserialize JSON object or object array from {:?}",
@@ -80,35 +66,5 @@ impl DirectUdp {
                 );
             }
         }
-    }
-
-    fn process(&self, message: &DataPoint) -> Result<(), String> {
-        if let Some(time) = message.timestamp {
-            self.db
-                .lock()
-                .map_err(|err| {
-                    error!("udp - Failed to get lock on database: {}", err);
-                    format!("{}", err)
-                })?
-                .insert(time, &message.subsystem, &message.parameter, &message.value)
-                .map_err(|err| {
-                    error!("udp - Failed to get lock on database: {}", err);
-                    format!("{}", err)
-                })?;
-        } else {
-            self.db
-                .lock()
-                .map_err(|err| {
-                    error!("udp - Failed to get lock on database: {}", err);
-                    format!("{}", err)
-                })?
-                .insert_systime(&message.subsystem, &message.parameter, &message.value)
-                .map_err(|err| {
-                    error!("udp - Failed to get lock on database: {}", err);
-                    format!("{}", err)
-                })?;
-        }
-
-        Ok(())
     }
 }

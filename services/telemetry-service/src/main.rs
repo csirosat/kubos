@@ -202,15 +202,18 @@
 //! }
 //! ```
 
-#[macro_use]
 extern crate juniper;
 
 mod schema;
 mod udp;
 
+use std::path::PathBuf;
+
 use crate::schema::{MutationRoot, QueryRoot, Subsystem};
+use chrono::Utc;
 use kubos_service::{Config, Logger, Service};
-use kubos_telemetry_db::Database;
+// use kubos_telemetry_db::Database;
+use flat_db::Builder;
 use log::error;
 
 fn main() {
@@ -237,9 +240,16 @@ fn main() {
             "Failed to parse 'database' config value"
         })
         .unwrap();
+    let mut db_path: PathBuf = db_path.parse().unwrap();
 
-    let db = Database::new(&db_path);
-    db.setup();
+    // Set the extension to be the current time
+    db_path.set_file_name(format!(
+        "{}.db",
+        Utc::now().format("%Y%m%d%H%M%S"),
+        // Utc::now().timestamp(),
+    ));
+
+    let db = Builder::new().path(&db_path).build().unwrap();
 
     let direct_udp = config.get("direct_port").map(|port| {
         let host = config
@@ -263,7 +273,7 @@ fn main() {
 
     Service::new(
         config,
-        Subsystem::new(db, direct_udp),
+        Subsystem::new(db, &db_path, direct_udp),
         QueryRoot,
         MutationRoot,
     )
