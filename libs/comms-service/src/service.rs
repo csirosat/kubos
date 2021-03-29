@@ -364,6 +364,10 @@ fn handle_graphql_request<WriteConnection: Clone, Packet: LinkPacket>(
         .map_err(|e| e.to_string())?;
 
     socket
+        .set_write_timeout(Some(Duration::from_millis(timeout)))
+        .map_err(|e| e.to_string())?;
+
+    socket
         .send_to(&message.payload(), (sat_ip, message.destination()))
         .map_err(|e| e.to_string())?;
 
@@ -396,6 +400,10 @@ fn handle_udp_dl_stream_request<WriteConnection: Clone, Packet: LinkPacket>(
 
     socket
         .set_read_timeout(Some(Duration::from_millis(timeout)))
+        .map_err(|e| e.to_string())?;
+
+    socket
+        .set_write_timeout(Some(Duration::from_millis(timeout)))
         .map_err(|e| e.to_string())?;
 
     socket
