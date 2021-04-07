@@ -287,7 +287,7 @@ fn read_thread<
                         match res {
                             Ok(_) => {
                                 log_telemetry(&data_ref, &TelemType::Down).unwrap();
-                                info!("GraphQL Packet successfully downlinked");
+                                // info!("GraphQL Packet successfully downlinked");
                             }
                             Err(e) => {
                                 log_telemetry(&data_ref, &TelemType::DownFailed).unwrap();
@@ -330,7 +330,7 @@ fn read_thread<
                         match res {
                             Ok(_) => {
                                 log_telemetry(&data_ref, &TelemType::Down).unwrap();
-                                info!("UDP DL Stream Completed");
+                                // info!("UDP DL Stream Completed");
                             }
                             Err(e) => {
                                 log_telemetry(&data_ref, &TelemType::DownFailed).unwrap();

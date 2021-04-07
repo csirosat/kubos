@@ -19,7 +19,9 @@
 use crate::packet::{LinkPacket, PayloadType};
 use crate::CommsResult;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use lazy_static::lazy_static;
 use std::io::Cursor;
+use std::sync::Mutex;
 
 #[derive(Eq, Debug, PartialEq)]
 struct PrimaryHeader {
@@ -60,6 +62,10 @@ const PACKET_TYPE: u8 = 0;
 #[cfg(feature = "uplink")]
 const PACKET_TYPE: u8 = 1;
 
+lazy_static! {
+    static ref SEQUENCE_COUNT: Mutex<u16> = Mutex::new(0);
+}
+
 impl LinkPacket for SpacePacket {
     fn build(
         command_id: u64,
@@ -74,7 +80,16 @@ impl LinkPacket for SpacePacket {
                 sec_header_flag: 0,
                 app_proc_id: u16::from(payload_type),
                 sequence_flags: 0,
-                sequence_count: 0,
+                sequence_count: {
+                    match SEQUENCE_COUNT.lock() {
+                        Ok(mut sc) => {
+                            let ret = *sc;
+                            *sc += 1;
+                            ret
+                        }
+                        Err(_) => std::u16::MAX,
+                    }
+                },
                 data_length: (payload.len() + 10 - 1) as u16,
             },
             secondary_header: SecondaryHeader {
