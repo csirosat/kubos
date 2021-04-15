@@ -14,7 +14,7 @@
 // limitations under the License.
 //
 
-#![deny(warnings)]
+// #![deny(warnings)]
 use channel_protocol::{ChannelProtocol, ProtocolError};
 use clap::{value_t, App, AppSettings, Arg, SubCommand};
 use failure::{bail, Error};
@@ -142,24 +142,47 @@ fn kill_session(
 
 fn run_shell(channel_proto: &ChannelProtocol, channel_id: u32) -> Result<(), Error> {
     println!("Press enter to send input to the shell session");
-    println!("Press Control-C to detach from the session");
+    println!(
+        "Press Control-C to detach from the session. Re-attach with `{} join -c {}`",
+        std::env::args().nth(0).unwrap(),
+        channel_id
+    );
+    println!("Press Control-D to kill session. Only works when not running anything in the shell");
     println!("To close the session, call `exit`");
 
-    let stdin = io::BufReader::new(timeout_readwrite::TimeoutReader::new(
+    let mut stdin = io::BufReader::new(timeout_readwrite::TimeoutReader::new(
         io::stdin(),
         Duration::from_millis(10),
     ));
 
     use io::BufRead;
-    let mut lines = stdin.lines();
+    // let mut lines = stdin.lines();
+    let mut buf = String::new();
 
     loop {
-        if let Some(Ok(mut input)) = lines.next() {
-            input += "\n";
-            channel_proto.send(&shell_protocol::messages::stdin::to_cbor(
-                channel_id,
-                Some(&input),
-            )?)?;
+        // if let Some(Ok(mut input)) = lines.next() {
+        //     dbg!(&input);
+        //     input += "\n";
+        //     channel_proto.send(&shell_protocol::messages::stdin::to_cbor(
+        //         channel_id,
+        //         Some(&input),
+        //     )?)?;
+        // }
+
+        match stdin.read_line(&mut buf) {
+            Ok(0) => {
+                // ctl+D
+                channel_proto.send(&shell_protocol::messages::kill::to_cbor(channel_id, None)?)?;
+                break Ok(());
+            }
+            Ok(_) => {
+                channel_proto.send(&shell_protocol::messages::stdin::to_cbor(
+                    channel_id,
+                    Some(&buf),
+                )?)?;
+                buf.clear();
+            }
+            Err(_) => {}
         }
 
         while let Ok(m) = channel_proto.recv_message(Some(Duration::from_millis(10))) {
