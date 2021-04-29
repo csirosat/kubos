@@ -21,6 +21,7 @@
 use crate::mode::*;
 use crate::scheduler::{Scheduler, SAFE_MODE};
 use crate::task_list::{import_raw_task_list, import_task_list, remove_task_list};
+use git_version::git_version;
 use juniper::FieldResult;
 use juniper::{graphql_object, GraphQLObject};
 use kubos_service;
@@ -82,7 +83,20 @@ graphql_object!(QueryRoot: Context as "Query" |&self| {
     {
         Ok(get_available_modes(&executor.context().subsystem().scheduler_dir, name)?)
     }
+
+    field git() -> ServiceGitHash {
+        ServiceGitHash {
+            name: "scheduler-service",
+            hash: git_version!(),
+        }
+    }
 });
+
+#[derive(GraphQLObject)]
+struct ServiceGitHash {
+    name: &'static str,
+    hash: &'static str,
+}
 
 pub struct MutationRoot;
 

@@ -23,7 +23,8 @@ use std::{
 
 use crate::udp::*;
 use flat_db::Database;
-use juniper::{FieldError, FieldResult, Value};
+use git_version::git_version;
+use juniper::{FieldError, FieldResult, GraphQLObject, Value};
 use kubos_service;
 
 pub type Context = kubos_service::Context<Subsystem>;
@@ -96,6 +97,19 @@ impl QueryRoot {
             .filter_map(|file_name| file_name.to_str().as_ref().map(|s| s.to_string()))
             .collect())
     }
+
+    fn git() -> ServiceGitHash {
+        ServiceGitHash {
+            name: "telemetry-service",
+            hash: git_version!(),
+        }
+    }
+}
+
+#[derive(GraphQLObject)]
+pub struct ServiceGitHash {
+    name: &'static str,
+    hash: &'static str,
 }
 
 pub struct MutationRoot;
