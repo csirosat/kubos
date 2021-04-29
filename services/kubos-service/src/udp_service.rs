@@ -174,7 +174,7 @@ where
         loop {
             if let Ok((size, peer)) = socket.recv_from(&mut buf) {
                 if let Ok(query) = String::from_utf8(buf[0..size].to_vec()) {
-                    let resp = match execute(
+                    let mut resp = match execute(
                         &query,
                         None,
                         &self.root_node,
@@ -188,6 +188,21 @@ where
                         .unwrap(),
                         Err(e) => serde_cbor::to_vec(&CborGQLErrors { errors: e }).unwrap(),
                     };
+
+                    if resp.len() > 64 * 1024 {
+                        error!("Graphql Response too large");
+                        resp = serde_cbor::to_vec(&CborGQLResponse {
+                            data: juniper::Value::Null,
+                            errors: vec![juniper::ExecutionError::at_origin(
+                                juniper::FieldError::new(
+                                    "CBOR Response too large",
+                                    juniper::Value::Null,
+                                ),
+                            )],
+                        })
+                        .unwrap();
+                    }
+
                     if let Err(e) = socket.send_to(&resp, &peer) {
                         error!("Failed to send udp response: {:?}", e);
                     };

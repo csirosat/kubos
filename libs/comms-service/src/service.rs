@@ -47,7 +47,9 @@ pub struct CommsControlBlock<ReadConnection: Clone, WriteConnection: Clone> {
     /// Maximum number of concurrent message handlers allowed.
     pub max_num_handlers: u16,
     /// Timeout for the completion of GraphQL operations within message handlers (in milliseconds).
-    pub timeout: u64,
+    pub read_timeout: u64,
+    /// Timeout for the completion of GraphQL operations within message handlers (in milliseconds).
+    pub write_timeout: u64,
     /// IP address of the computer that is running the communication service.
     pub ip: Ipv4Addr,
     /// Optional list of ports used by downlink endpoints that send messages to the ground.
@@ -76,13 +78,14 @@ impl<ReadConnection: Clone + Debug, WriteConnection: Clone + Debug> Debug
         write!(
             f,
             "CommsControlBlock {{ read: {}, write: {:?}, read_conn: {:?}, write_conn: {:?},
-            max_num_handlers: {:?}, timeout: {:?}, ip: {:?}, downlink_ports: {:?} }}",
+            max_num_handlers: {:?}, timeout: {:?}:{:?}, ip: {:?}, downlink_ports: {:?} }}",
             read,
             write,
             self.read_conn,
             self.write_conn,
             self.max_num_handlers,
-            self.timeout,
+            self.read_timeout,
+            self.write_timeout,
             self.ip,
             self.downlink_ports,
         )
@@ -121,7 +124,8 @@ impl<ReadConnection: Clone, WriteConnection: Clone>
             read_conn,
             write_conn,
             max_num_handlers: config.max_num_handlers.unwrap_or(DEFAULT_MAX_HANDLERS),
-            timeout: config.timeout.unwrap_or(DEFAULT_TIMEOUT),
+            read_timeout: config.read_timeout.unwrap_or(DEFAULT_TIMEOUT),
+            write_timeout: config.write_timeout.unwrap_or(DEFAULT_TIMEOUT),
             ip: Ipv4Addr::from_str(&config.ip)?,
             downlink_ports: config.downlink_ports,
         })
@@ -272,13 +276,20 @@ fn read_thread<
                 let write_ref = comms.write[0].clone();
                 let data_ref = data.clone();
                 let sat_ref = comms.ip;
-                let time_ref = comms.timeout;
+                let read_time_ref = comms.read_timeout;
+                let write_time_ref = comms.write_timeout;
                 let num_handlers_ref = num_handlers.clone();
                 thread::Builder::new()
-                    .stack_size(16 * 1024)
+                    .stack_size(80 * 1024)
                     .spawn(move || {
-                        let res =
-                            handle_graphql_request(conn_ref, &write_ref, packet, time_ref, sat_ref);
+                        let res = handle_graphql_request(
+                            conn_ref,
+                            &write_ref,
+                            packet,
+                            read_time_ref,
+                            write_time_ref,
+                            sat_ref,
+                        );
 
                         if let Ok(mut num_handlers) = num_handlers_ref.lock() {
                             *num_handlers -= 1;
@@ -314,13 +325,19 @@ fn read_thread<
                 let write_ref = comms.write[0].clone();
                 let data_ref = data.clone();
                 let sat_ref = comms.ip;
-                let time_ref = comms.timeout * 10;
+                let read_time_ref = comms.read_timeout * 10;
+                let write_time_ref = comms.write_timeout * 10;
                 let num_handlers_ref = num_handlers.clone();
                 thread::Builder::new()
                     .stack_size(16 * 1024)
                     .spawn(move || {
                         let res = handle_udp_dl_stream_request(
-                            conn_ref, &write_ref, packet, time_ref, sat_ref,
+                            conn_ref,
+                            &write_ref,
+                            packet,
+                            read_time_ref,
+                            write_time_ref,
+                            sat_ref,
                         );
 
                         if let Ok(mut num_handlers) = num_handlers_ref.lock() {
@@ -352,7 +369,8 @@ fn handle_graphql_request<WriteConnection: Clone, Packet: LinkPacket>(
     write_conn: WriteConnection,
     write: &Arc<WriteFn<WriteConnection>>,
     message: Box<Packet>,
-    timeout: u64,
+    read_timeout: u64,
+    write_timeout: u64,
     sat_ip: Ipv4Addr,
 ) -> Result<(), String> {
     use std::time::Duration;
@@ -360,18 +378,18 @@ fn handle_graphql_request<WriteConnection: Clone, Packet: LinkPacket>(
     let socket = UdpSocket::bind((sat_ip, 0)).map_err(|e| e.to_string())?;
 
     socket
-        .set_read_timeout(Some(Duration::from_millis(timeout)))
+        .set_read_timeout(Some(Duration::from_millis(read_timeout)))
         .map_err(|e| e.to_string())?;
 
     socket
-        .set_write_timeout(Some(Duration::from_millis(timeout)))
+        .set_write_timeout(Some(Duration::from_millis(write_timeout)))
         .map_err(|e| e.to_string())?;
 
     socket
         .send_to(&message.payload(), (sat_ip, message.destination()))
         .map_err(|e| e.to_string())?;
 
-    let mut buf = [0; 4 * 1024];
+    let mut buf = [0; 64 * 1024];
 
     let (size, _addr) = socket.recv_from(&mut buf).map_err(|e| e.to_string())?;
 
@@ -391,7 +409,8 @@ fn handle_udp_dl_stream_request<WriteConnection: Clone, Packet: LinkPacket>(
     write_conn: WriteConnection,
     write: &Arc<WriteFn<WriteConnection>>,
     message: Box<Packet>,
-    timeout: u64,
+    read_timeout: u64,
+    write_timeout: u64,
     sat_ip: Ipv4Addr,
 ) -> Result<(), String> {
     use std::time::Duration;
@@ -399,18 +418,18 @@ fn handle_udp_dl_stream_request<WriteConnection: Clone, Packet: LinkPacket>(
     let socket = UdpSocket::bind((sat_ip, 0)).map_err(|e| e.to_string())?;
 
     socket
-        .set_read_timeout(Some(Duration::from_millis(timeout)))
+        .set_read_timeout(Some(Duration::from_millis(read_timeout)))
         .map_err(|e| e.to_string())?;
 
     socket
-        .set_write_timeout(Some(Duration::from_millis(timeout)))
+        .set_write_timeout(Some(Duration::from_millis(write_timeout)))
         .map_err(|e| e.to_string())?;
 
     socket
         .send_to(&message.payload(), (sat_ip, message.destination()))
         .map_err(|e| e.to_string())?;
 
-    let mut buf = [0; 4 * 1024];
+    let mut buf = [0; 16 * 1024];
 
     while let Ok((size, _addr)) = socket.recv_from(&mut buf) {
         // Take received message and wrap it in a LinkPacket
