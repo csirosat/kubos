@@ -73,7 +73,7 @@ impl QueryRoot {
     fn files(context: &Context) -> FieldResult<Vec<String>> {
         let db_path = context.subsystem().db_path.to_owned();
         let dir = db_path.parent().ok_or(FieldError::new(
-            "Path does not have a parent",
+            "path does not have a parent",
             Value::null(),
         ))?;
 
@@ -115,4 +115,27 @@ pub struct ServiceGitHash {
 pub struct MutationRoot;
 
 #[juniper::object(Context = Context)]
-impl MutationRoot {}
+impl MutationRoot {
+    /// This only allows deleting files from the DB directory.
+    /// eg:
+    /// to delete "/data/telemetry/123456789.db"
+    /// graphql `mutation{delete(files:["123456789.db"])}`
+    fn delete(context: &Context, files: Vec<String>) -> FieldResult<Vec<String>> {
+        let db_path = context.subsystem().db_path.to_owned();
+        let dir = db_path.parent().ok_or(FieldError::new(
+            "path does not have a parent",
+            Value::null(),
+        ))?;
+
+        Ok(files
+            .iter()
+            .map(|file| {
+                let mut path = dir.to_owned();
+                path.push(file);
+                path
+            })
+            .filter(|path| std::fs::remove_file(&path).is_ok())
+            .filter_map(|path| path.to_str().map(|s| s.to_owned()))
+            .collect())
+    }
+}
