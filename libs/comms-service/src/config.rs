@@ -60,8 +60,6 @@ impl CommsConfig {
             CommsServiceError::ConfigError(msg)
         })?;
 
-        dbg!(&config);
-
         Ok(config)
     }
 }
