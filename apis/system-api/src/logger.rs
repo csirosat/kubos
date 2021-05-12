@@ -99,7 +99,7 @@ fn get_log_level() -> Result<LevelFilter, Error> {
         }
     } else {
         // The "-l" arg wasn't specified, so we can go ahead with the default
-        Ok(LevelFilter::Debug)
+        Ok(LevelFilter::Info)
     }
 }
 
