@@ -1,4 +1,5 @@
-#[build]
+[build]
+incremental = false # must be disabled in all rust versions prior to 1.52.1
 #target = "thumbv7m-unknown-linux-uclibc"
 
 [target.thumbv7m-unknown-linux-uclibc]
