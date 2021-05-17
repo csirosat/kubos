@@ -214,7 +214,9 @@ use chrono::Utc;
 use kubos_service::{Config, Logger, Service};
 // use kubos_telemetry_db::Database;
 use flat_db::Builder;
+use libc::{SIGINT, SIGTERM};
 use log::error;
+use signal_hook::iterator::Signals;
 
 fn main() {
     Logger::init("kubos-telemetry-service").unwrap();
@@ -270,6 +272,29 @@ fn main() {
 
         format!("{}:{}", host_ip, port)
     });
+
+    let db_c = db.clone();
+    std::thread::Builder::new()
+        .stack_size(1024)
+        .spawn(move || {
+            let db = db_c;
+            let sigs = vec![SIGINT, SIGTERM];
+
+            let mut signals = Signals::new(&sigs).unwrap();
+
+            for signal in &mut signals {
+                match signal as libc::c_int {
+                    SIGINT | SIGTERM => {
+                        db.flush().unwrap();
+                        std::process::exit(0);
+                    }
+                    s => {
+                        dbg!(s);
+                    }
+                }
+            }
+        })
+        .unwrap();
 
     Service::new(
         config,

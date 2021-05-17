@@ -814,6 +814,7 @@ dependencies = [
  "chrono",
  "failure",
  "libc",
+ "log 0.4.14",
  "serde",
  "serde_cbor 0.11.1",
 ]
@@ -3447,6 +3448,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "signal-hook"
+version = "0.3.8"
+source = "git+https://github.com/csirosat/signal-hook.git#f72a4a1aef64e074a65be38b9fb7b18566fb9099"
+dependencies = [
+ "cc",
+ "libc",
+ "signal-hook-registry 1.3.0 (git+https://github.com/csirosat/signal-hook.git)",
+]
+
+[[package]]
+name = "signal-hook-registry"
+version = "1.3.0"
+source = "git+https://github.com/csirosat/signal-hook.git#f72a4a1aef64e074a65be38b9fb7b18566fb9099"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "signal-hook-registry"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3715,6 +3734,7 @@ dependencies = [
  "log 0.4.14",
  "serde",
  "serde_cbor 0.11.1",
+ "signal-hook",
 ]
 
 [[package]]
@@ -3896,7 +3916,7 @@ dependencies = [
  "mio-uds",
  "num_cpus",
  "pin-project-lite 0.1.12",
- "signal-hook-registry",
+ "signal-hook-registry 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "slab",
  "winapi 0.3.9",
 ]
