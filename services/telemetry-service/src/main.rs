@@ -245,11 +245,7 @@ fn main() {
     let mut db_path: PathBuf = db_path.parse().unwrap();
 
     // Set the extension to be the current time
-    db_path.set_file_name(format!(
-        "{}.db",
-        Utc::now().format("%Y%m%d%H%M%S"),
-        // Utc::now().timestamp(),
-    ));
+    db_path.set_file_name(db_name());
 
     let db = Builder::new().path(&db_path).build().unwrap();
 
@@ -303,4 +299,13 @@ fn main() {
         MutationRoot,
     )
     .start();
+}
+
+/// Generate a db file name using the current time
+pub fn db_name() -> String {
+    format!(
+        "{}.db",
+        Utc::now().format("%Y%m%d%H%M%S"),
+        // Utc::now().timestamp(),
+    )
 }
