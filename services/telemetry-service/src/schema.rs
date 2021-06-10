@@ -118,7 +118,7 @@ pub struct MutationRoot;
 impl MutationRoot {
     /// This only allows deleting files from the DB directory.
     /// eg:
-    /// to delete "/data/telemetry/123456789.db"
+    /// to delete "/sdcard/telemetry/123456789.db"
     /// graphql `mutation{delete(files:["123456789.db"])}`
     fn delete(context: &Context, files: Vec<String>) -> FieldResult<Vec<String>> {
         let db_path = context.subsystem().db_path.to_owned();
