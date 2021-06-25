@@ -207,7 +207,7 @@ extern crate juniper;
 mod schema;
 mod udp;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::schema::{MutationRoot, QueryRoot, Subsystem};
 use chrono::Utc;
@@ -215,7 +215,7 @@ use kubos_service::{Config, Logger, Service};
 // use kubos_telemetry_db::Database;
 use flat_db::Builder;
 use libc::{SIGINT, SIGTERM};
-use log::error;
+use log::{error, info};
 use signal_hook::iterator::Signals;
 
 fn main() {
@@ -242,10 +242,8 @@ fn main() {
             "Failed to parse 'database' config value"
         })
         .unwrap();
-    let mut db_path: PathBuf = db_path.parse().unwrap();
 
-    // Set the extension to be the current time
-    db_path.set_file_name(db_name());
+    let db_path = unique_db_name(db_path);
 
     let db = Builder::new().path(&db_path).build().unwrap();
 
@@ -301,11 +299,37 @@ fn main() {
     .start();
 }
 
+/// Generate a unique db name based of the current time, and if there are colisions a incrementing
+/// integer is appended.
+pub fn unique_db_name(base: impl AsRef<Path>) -> PathBuf {
+    let mut base = base.as_ref().to_owned();
+    let timestamp = timestamp();
+
+    let mut count = 0;
+    loop {
+        // Set the extension to be the current time
+        base.set_file_name(db_name(&timestamp, count));
+
+        match std::fs::metadata(&base) {
+            Ok(_) => count += 1,
+            Err(_) => {
+                info!("Telemetry DB path {:?}", &base);
+                break base;
+            }
+        }
+    }
+}
+
 /// Generate a db file name using the current time
-pub fn db_name() -> String {
-    format!(
-        "{}.db",
-        Utc::now().format("%Y%m%d%H%M%S"),
-        // Utc::now().timestamp(),
-    )
+fn db_name(timestamp: &str, count: usize) -> String {
+    if count == 0 {
+        format!("{}.db", timestamp)
+    } else {
+        format!("{}_{:02}.db", timestamp, count,)
+    }
+}
+
+/// Generate the current timestamp as a string
+fn timestamp() -> String {
+    Utc::now().format("%Y%m%d%H%M%S").to_string()
 }

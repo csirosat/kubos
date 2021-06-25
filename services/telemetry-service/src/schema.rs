@@ -21,7 +21,7 @@ use std::{
     thread,
 };
 
-use crate::{db_name, udp::*};
+use crate::{udp::*, unique_db_name};
 use flat_db::Database;
 use git_version::git_version;
 use juniper::{FieldError, FieldResult, GraphQLObject, Value};
@@ -141,10 +141,11 @@ impl MutationRoot {
 
     fn rotate(context: &Context) -> FieldResult<RotateResult> {
         let old_path = context.subsystem().db_path.to_owned();
-        let mut db_path: PathBuf = old_path.clone();
+        let db_path: PathBuf = old_path.clone();
 
         // Set the extension to be the current time
-        db_path.set_file_name(db_name());
+        let db_path = unique_db_name(db_path);
+
         let new = context.subsystem().database.rotate(db_path)?;
 
         let old_path = old_path.to_str().unwrap().to_owned();

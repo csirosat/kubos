@@ -16,7 +16,7 @@
 
 pub use flat_db::DataPoint;
 use flat_db::Database;
-use log::{error, info};
+use log::{debug, error, info};
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::Arc;
 
@@ -54,6 +54,8 @@ impl DirectUdp {
                 .recv_from(&mut buf)
                 .map_err(|err| format!("Failed to receive a message: {}", err))
                 .unwrap();
+
+            debug!("Received Telemetry");
 
             if let Ok(val) = serde_cbor::from_slice::<DataPoint>(&buf[0..(size)]) {
                 self.db.insert(&[val]).unwrap();
