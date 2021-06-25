@@ -393,12 +393,12 @@ dependencies = [
  "kubos-system",
  "lazy_static 1.4.0",
  "log 0.4.14",
- "pnet",
+ "pnet 0.27.2",
  "reqwest 0.9.24",
  "serde",
  "serde_derive",
  "tempfile",
- "toml",
+ "toml 0.4.10",
  "utils",
  "warp",
 ]
@@ -1427,6 +1427,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ipnetwork"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "02c3eaab3ac0ede60ffa41add21970a7df7d91772c03383aac6c2c3d53cc716b"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "iron"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1652,7 +1661,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "tempfile",
- "toml",
+ "toml 0.4.10",
  "uuid 0.6.5",
  "warp",
 ]
@@ -1713,7 +1722,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "tempfile",
- "toml",
+ "toml 0.5.8",
 ]
 
 [[package]]
@@ -2312,7 +2321,7 @@ dependencies = [
  "log 0.4.14",
  "serde_json",
  "time",
- "toml",
+ "toml 0.4.10",
 ]
 
 [[package]]
@@ -2520,12 +2529,26 @@ version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9788fd699543f1e945b6b9b89c3059ae8564d9b6c062c44b1c5630e1f1a07a6c"
 dependencies = [
- "ipnetwork",
- "pnet_base",
- "pnet_datalink",
- "pnet_packet",
+ "ipnetwork 0.15.1",
+ "pnet_base 0.22.0",
+ "pnet_datalink 0.23.1",
+ "pnet_packet 0.23.1",
  "pnet_sys 0.23.1",
- "pnet_transport",
+ "pnet_transport 0.23.1",
+]
+
+[[package]]
+name = "pnet"
+version = "0.27.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b657d5b9a98a2c81b82549922b8b15984e49f8120cd130b11a09f81b9b55d633"
+dependencies = [
+ "ipnetwork 0.17.0",
+ "pnet_base 0.27.2",
+ "pnet_datalink 0.27.2",
+ "pnet_packet 0.27.2",
+ "pnet_sys 0.27.2",
+ "pnet_transport 0.27.2",
 ]
 
 [[package]]
@@ -2535,16 +2558,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4df28acf2fcc77436dd2b91a9a0c2bb617f9ca5f2acefee1a4135058b9f9801f"
 
 [[package]]
+name = "pnet_base"
+version = "0.27.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e4688aa497ef62129f302a5800ebde67825f8ff129f43690ca84099f6620bed"
+
+[[package]]
 name = "pnet_datalink"
 version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d27361d7578b410d0eb5fe815c2b2105b01ab770a7c738cb9a231457a809fcc7"
 dependencies = [
- "ipnetwork",
+ "ipnetwork 0.15.1",
  "libc",
- "pnet_base",
+ "pnet_base 0.22.0",
  "pnet_sys 0.27.2",
  "winapi 0.2.8",
+]
+
+[[package]]
+name = "pnet_datalink"
+version = "0.27.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59001c9c4d9d23bf2f61afaaf134a766fd6932ba2557c606b9112157053b9ac7"
+dependencies = [
+ "ipnetwork 0.17.0",
+ "libc",
+ "pnet_base 0.27.2",
+ "pnet_sys 0.27.2",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -2564,7 +2606,16 @@ version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5326f15c063df43835c5a6e13fc81af2520e9fd104ce1310e15166bb2921d9bd"
 dependencies = [
- "pnet_base",
+ "pnet_base 0.22.0",
+]
+
+[[package]]
+name = "pnet_macros_support"
+version = "0.27.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4b99269a458570bc06a9132254349f6543d9abc92e88b68d8de934aac9481f6c"
+dependencies = [
+ "pnet_base 0.27.2",
 ]
 
 [[package]]
@@ -2574,9 +2625,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5521d195b9eb5c1632ea07b41ae14363e2d323f8a40ae51ce2c242acd4a9cda5"
 dependencies = [
  "glob",
- "pnet_base",
+ "pnet_base 0.22.0",
  "pnet_macros",
- "pnet_macros_support",
+ "pnet_macros_support 0.23.1",
+ "syntex",
+]
+
+[[package]]
+name = "pnet_packet"
+version = "0.27.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33f8238f4eb897a55ca06510cd71afb5b5ca7b4ff2d7188f1ca855fc1710133e"
+dependencies = [
+ "glob",
+ "pnet_base 0.27.2",
+ "pnet_macros",
+ "pnet_macros_support 0.27.2",
  "syntex",
 ]
 
@@ -2608,9 +2672,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "91ac26532b90ad979579f3364ceea0af86ec3cbcd10505101d519d6f49193e9b"
 dependencies = [
  "libc",
- "pnet_base",
- "pnet_packet",
+ "pnet_base 0.22.0",
+ "pnet_packet 0.23.1",
  "pnet_sys 0.23.1",
+]
+
+[[package]]
+name = "pnet_transport"
+version = "0.27.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "326abdfd2e70e8e943bd58087b59686de170cac050a3b19c9fcc84db01690af5"
+dependencies = [
+ "libc",
+ "pnet_base 0.27.2",
+ "pnet_packet 0.27.2",
+ "pnet_sys 0.27.2",
 ]
 
 [[package]]
@@ -3092,7 +3168,7 @@ version = "0.1.0"
 dependencies = [
  "i2c-linux",
  "nosengine-rust",
- "toml",
+ "toml 0.4.10",
 ]
 
 [[package]]
@@ -3113,7 +3189,7 @@ dependencies = [
  "failure",
  "nosengine-rust",
  "serial",
- "toml",
+ "toml 0.4.10",
 ]
 
 [[package]]
@@ -4114,6 +4190,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "toml"
+version = "0.5.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a31142970826733df8241ef35dc040ef98c679ab14d7c3e54d827099b3acecaa"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "tower-service"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4228,7 +4313,7 @@ dependencies = [
  "clap",
  "comms-service",
  "failure",
- "pnet",
+ "pnet 0.23.1",
  "serde_json",
  "serial",
 ]
@@ -4241,7 +4326,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
- "toml",
+ "toml 0.4.10",
 ]
 
 [[package]]
