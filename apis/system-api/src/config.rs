@@ -14,6 +14,7 @@
 // limitations under the License.
 //
 use failure::{bail, Error};
+use log::LevelFilter;
 use serde_derive::Deserialize;
 use std::env;
 use std::fs::File;
@@ -62,6 +63,7 @@ impl Address {
 #[derive(Clone, Debug)]
 pub struct Config {
     addr: Option<Address>,
+    log_level: Option<LevelFilter>,
     raw: Value,
 }
 
@@ -69,6 +71,7 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             addr: None,
+            log_level: None,
             raw: Value::String("".to_string()),
         }
     }
@@ -111,6 +114,11 @@ impl Config {
         } else {
             None
         }
+    }
+
+    /// Retyrb the configured log level
+    pub fn log_level(&self) -> Option<LevelFilter> {
+        self.log_level.map(|ll| ll.clone())
     }
 
     /// Returns the category's configuration information
@@ -184,6 +192,16 @@ fn parse_config_str(name: &str, contents: &str) -> Result<Config, Error> {
     if let Some(data) = data.get(name) {
         if let Some(address) = data.get("addr") {
             config.addr = Some(address.clone().try_into()?);
+        }
+        if let Some(log_level) = data.get("log_level") {
+            config.log_level = match log_level.as_str() {
+                Some("error") => Some(LevelFilter::Error),
+                Some("warn") => Some(LevelFilter::Warn),
+                Some("info") => Some(LevelFilter::Info),
+                Some("debug") => Some(LevelFilter::Debug),
+                Some("trace") => Some(LevelFilter::Trace),
+                _ => None,
+            };
         }
         config.raw = data.clone();
     } else {

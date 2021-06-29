@@ -18,8 +18,8 @@
 //! Common structure and functions for setting up service logging
 //!
 
-use failure::{bail, Error};
-use log::LevelFilter;
+use failure::Error;
+use log::{warn, LevelFilter};
 use log4rs::append::console::ConsoleAppender;
 use log4rs::config::Config;
 use log4rs::encode::pattern::PatternEncoder;
@@ -30,7 +30,7 @@ use std::env;
 /// All messages will be routed to syslog and optionally echoed to the console
 pub fn init(service_name: &str) -> Result<(), Error> {
     let stdout_flag = get_stdout_flag();
-    let log_level = get_log_level()?;
+    let log_level = get_log_level(&service_name);
 
     // Use custom PatternEncoder to avoid duplicate timestamps in logs.
     let syslog_encoder = Box::new(PatternEncoder::new("{m}"));
@@ -75,7 +75,7 @@ pub fn init(service_name: &str) -> Result<(), Error> {
     Ok(())
 }
 
-fn get_log_level() -> Result<LevelFilter, Error> {
+fn get_log_level(service_name: &str) -> LevelFilter {
     // Manually check for a "-l {log-level}" command line argument specifying a log level
     // Doing it this way so that entities which use this module (apps, services) can have any
     // number of additional command arguments
@@ -84,23 +84,33 @@ fn get_log_level() -> Result<LevelFilter, Error> {
     // Navigate to the "-l" option
     let config_arg_pos = args.position(|arg| arg == "-l");
 
-    if let Some(_pos) = config_arg_pos {
-        // The config path will be the arg immediately after "-l"
-        match args.next() {
-            Some(path) => match path.as_str() {
-                "error" => Ok(LevelFilter::Error),
-                "warn" => Ok(LevelFilter::Warn),
-                "info" => Ok(LevelFilter::Info),
-                "debug" => Ok(LevelFilter::Debug),
-                "trace" => Ok(LevelFilter::Trace),
-                _ => bail!("The '-l' arg was specified, but an invalid log level was provided"),
-            },
-            None => bail!("The '-l' arg was specified, but no log level was provided"),
-        }
-    } else {
-        // The "-l" arg wasn't specified, so we can go ahead with the default
-        Ok(LevelFilter::Info)
-    }
+    config_arg_pos
+        .and_then(|_| {
+            // The config path will be the arg immediately after "-l"
+            match args.next() {
+                Some(path) => match path.as_str() {
+                    "error" => Some(LevelFilter::Error),
+                    "warn" => Some(LevelFilter::Warn),
+                    "info" => Some(LevelFilter::Info),
+                    "debug" => Some(LevelFilter::Debug),
+                    "trace" => Some(LevelFilter::Trace),
+                    _ => {
+                        warn!("The '-l' arg was specified, but an invalid log level was provided");
+                        None
+                    }
+                },
+                None => {
+                    warn!("The '-l' arg was specified, but no log level was provided");
+                    None
+                }
+            }
+        })
+        .or_else(|| {
+            crate::Config::new(service_name)
+                .ok()
+                .and_then(|config| config.log_level())
+        })
+        .unwrap_or(LevelFilter::Info)
 }
 
 fn get_stdout_flag() -> bool {
