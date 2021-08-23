@@ -18,6 +18,7 @@
 
 #![deny(missing_docs)]
 #![deny(warnings)]
+#![feature(no_more_cas)]
 
 //!
 //! This library allows users to define and start communication services within their hardware services.

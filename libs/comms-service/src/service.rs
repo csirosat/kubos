@@ -24,6 +24,10 @@ use log::info;
 use std::fmt::Debug;
 use std::net::{Ipv4Addr, UdpSocket};
 use std::str::FromStr;
+use std::sync::atomic::AtomicU32;
+use std::sync::atomic::Ordering;
+use std::sync::mpsc;
+use std::sync::mpsc::SendError;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -474,21 +478,103 @@ fn downlink_endpoint<ReadConnection: Clone, WriteConnection: Clone, Packet: Link
     sat_ip: Ipv4Addr,
 ) {
     // Bind the downlink endpoint to a UDP socket.
-    let socket = match UdpSocket::bind((sat_ip, port)) {
-        Ok(sock) => sock,
-        Err(e) => return log_error(&data, e.to_string()).unwrap(),
-    };
+    // let socket = match UdpSocket::bind((sat_ip, port)) {
+    //     Ok(sock) => sock,
+    //     Err(e) => return log_error(&data, e.to_string()).unwrap(),
+    // };
 
-    let mut buf = vec![0; Packet::max_size()];
-    loop {
-        // Indefinitely wait for a message from any application or service.
-        let (size, _address) = match socket.recv_from(&mut buf) {
-            Ok(tuple) => tuple,
-            Err(e) => {
-                log_error(&data, e.to_string()).unwrap();
-                continue;
+    debug!("Starting downlink endpoint {}", &port);
+
+    let (packet_tx, packet_rx) = mpsc::channel();
+    let (return_tx, return_rx) = mpsc::channel();
+    let num_packets = Arc::new(AtomicU32::new(0));
+
+    let max = 32;
+
+    let data_c = data.clone();
+    let num_packets_c = num_packets.clone();
+
+    // This thread receives data for downlink, buffers it and puts it in a fifo.
+    // The number of buffers is limited, the thread will loop/wait for buffers to be released then
+    // continue.
+    thread::Builder::new()
+        .stack_size(4 * 1024)
+        .spawn(move || {
+            info!("Starting UDP receiving thread for {}", &port);
+            let data = data_c;
+            let num_packets = num_packets_c;
+            // Bind the downlink endpoint to a UDP socket.
+            let socket = match UdpSocket::bind((sat_ip, port)) {
+                Ok(sock) => sock,
+                Err(e) => return log_error(&data, e.to_string()).unwrap(),
+            };
+
+            let mut buf: Option<Vec<u8>> = None;
+            loop {
+                if let None = &buf {
+                    buf = Some(match return_rx.try_recv() {
+                        Ok(buf) => buf,
+                        Err(_) => {
+                            let num_pkts = num_packets.load(Ordering::SeqCst);
+                            if num_pkts >= max {
+                                std::thread::yield_now();
+                                continue;
+                            } else {
+                                debug!("Created new buffer for {}", &port);
+                                vec![0; 8 * 1024]
+                            }
+                        }
+                    });
+                }
+
+                if let Some(mut mut_buf) = buf.take() {
+                    // Indefinitely wait for a message from any application or service.
+                    let (size, address) = match socket.recv_from(&mut mut_buf) {
+                        Ok(tuple) => tuple,
+                        Err(e) => {
+                            log_error(&data, e.to_string()).unwrap();
+                            buf = Some(mut_buf);
+                            continue;
+                        }
+                    };
+
+                    if let Err(SendError((_size, _address, bad_buf))) =
+                        packet_tx.send((size, address, mut_buf))
+                    {
+                        error!("Failed to send packet to channel");
+                        buf = Some(bad_buf);
+                        continue;
+                    }
+
+                    num_packets.fetch_add(1, Ordering::SeqCst);
+                }
             }
-        };
+        })
+        .unwrap();
+
+    // This socket is used specifically for sending backpreassure to the client
+    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+
+    // Take the packets from the FIFO and downlink them.
+    // Also tell the sender how many packets we want from them.
+    while let Ok((size, address, buf)) = packet_rx.recv() {
+        if let Some(num_pkts) = num_packets
+            .fetch_update(
+                |x| match x {
+                    x if x > 0 => Some(x - 1),
+                    _ => None,
+                },
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            )
+            .ok()
+        {
+            // tell the sender how many packets they're allowed to send us.
+            let msg = &[max as u8 - std::cmp::min(num_pkts, max) as u8];
+            if let Err(e) = socket.send_to(msg, address) {
+                debug!("Could not send backpreassure: {:?}", e);
+            }
+        }
 
         // Take received message and wrap it in a Link packet.
         // Setting port to 0 because we don't know the ground port...
@@ -515,5 +601,9 @@ fn downlink_endpoint<ReadConnection: Clone, WriteConnection: Clone, Packet: Link
                 error!("Packet failed to downlink");
             }
         };
+
+        if let Err(_) = return_tx.send(buf) {
+            error!("Dropping packet as failed to send back to udp thread");
+        }
     }
 }
