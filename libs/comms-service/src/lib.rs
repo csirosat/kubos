@@ -17,7 +17,6 @@
 //
 
 #![deny(missing_docs)]
-#![deny(warnings)]
 #![feature(no_more_cas)]
 
 //!
@@ -71,10 +70,10 @@
 //! ip = "192.168.8.2"
 //! ```
 
-#[cfg(feature = "graphql")]
 #[macro_use]
 extern crate juniper;
 
+#[cfg(feature = "service")]
 #[macro_use]
 extern crate log;
 
@@ -84,20 +83,24 @@ extern crate failure;
 mod config;
 mod errors;
 mod packet;
+#[cfg(feature = "service")]
 mod service;
 mod spacepacket;
+#[cfg(feature = "service")]
 mod telemetry;
 
 #[cfg(test)]
 mod tests;
 
 /// Communication Service library.
+#[cfg(feature = "service")]
 pub use crate::service::*;
 
 /// Communication Service errors.
 pub use crate::errors::*;
 
 /// Communication Service telemetry.
+#[cfg(feature = "service")]
 pub use crate::telemetry::CommsTelemetry;
 
 /// Communication Service configuration parsing.

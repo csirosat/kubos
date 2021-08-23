@@ -5,9 +5,10 @@ authors = ["William Greer <wgreer184@gmail.com>", "Sam Justice <sam.justice1@gma
 edition = "2018"
 
 [features]
-default = ["graphql"]
+default = ["graphql", "service"]
 graphql = ["juniper"]
 uplink = []
+service = []
 
 [dependencies]
 byteorder = "1.2.7"
