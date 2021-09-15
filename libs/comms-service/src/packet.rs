@@ -17,11 +17,12 @@
 //! Link layer definitions used by the communications service
 
 use crate::CommsResult;
+use serde::Deserialize;
 
 /// Enum representing the different payload types handled
 /// by the communications service
 #[repr(u8)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub enum PayloadType {
     /// Packet intended for GraphQL request/response
     GraphQL,

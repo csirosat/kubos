@@ -1,6 +1,4 @@
 //
-// Copyright (C) 2018 Kubos Corporation
-//
 // Licensed under the Apache License, Version 2.0 (the "License")
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -58,7 +56,7 @@ pub struct CommsControlBlock<ReadConnection: Clone, WriteConnection: Clone> {
     pub ip: Ipv4Addr,
     /// Optional list of ports used by downlink endpoints that send messages to the ground.
     /// Each port in the list will be used by one downlink endpoint.
-    pub downlink_ports: Option<Vec<u16>>,
+    pub downlink_ports: Option<Vec<DownlinkPort>>,
 }
 
 impl<ReadConnection: Clone + Debug, WriteConnection: Clone + Debug> Debug
@@ -165,7 +163,7 @@ impl CommsService {
         if let Some(ports) = control.downlink_ports {
             for (_, (port, write)) in ports.iter().zip(control.write.iter()).enumerate() {
                 let telem_ref = telem.clone();
-                let port_ref = *port;
+                let port_ref = port.clone();
                 let conn_ref = control.write_conn.clone();
                 let write_ref = write.clone();
                 let ip = control.ip;
@@ -265,6 +263,7 @@ fn read_thread<
                 //                     .unwrap();
             }
             PayloadType::GraphQL => {
+                debug!("Received GraphQL Packet");
                 if let Ok(mut num_handlers) = num_handlers.lock() {
                     if *num_handlers >= comms.max_num_handlers {
                         log_error(&data, CommsServiceError::NoAvailablePorts.to_string()).unwrap();
@@ -392,10 +391,12 @@ fn handle_graphql_request<WriteConnection: Clone, Packet: LinkPacket>(
     socket
         .send_to(&message.payload(), (sat_ip, message.destination()))
         .map_err(|e| e.to_string())?;
+    debug!("Sent GraphQL Request to {}", message.destination());
 
     let mut buf = [0; 64 * 1024];
 
     let (size, _addr) = socket.recv_from(&mut buf).map_err(|e| e.to_string())?;
+    debug!("Received GraphQL Response from {}", message.destination());
 
     // Take received message and wrap it in a LinkPacket
     let packet = Packet::build(message.command_id(), PayloadType::GraphQL, 0, &buf[0..size])
@@ -404,6 +405,7 @@ fn handle_graphql_request<WriteConnection: Clone, Packet: LinkPacket>(
 
     // Write packet to the gateway
     write(&write_conn.clone(), &packet).map_err(|e| e.to_string())?;
+    debug!("Downlinked GraphQL Response from {}", message.destination());
 
     Ok(())
 }
@@ -472,7 +474,7 @@ fn handle_udp_passthrough<Packet: LinkPacket>(
 // the UDP packet payload and then writes the link packets to a gateway.
 fn downlink_endpoint<ReadConnection: Clone, WriteConnection: Clone, Packet: LinkPacket>(
     data: &Arc<Mutex<CommsTelemetry>>,
-    port: u16,
+    port: DownlinkPort,
     write_conn: WriteConnection,
     write: &Arc<WriteFn<WriteConnection>>,
     sat_ip: Ipv4Addr,
@@ -483,7 +485,7 @@ fn downlink_endpoint<ReadConnection: Clone, WriteConnection: Clone, Packet: Link
     //     Err(e) => return log_error(&data, e.to_string()).unwrap(),
     // };
 
-    debug!("Starting downlink endpoint {}", &port);
+    debug!("Starting downlink endpoint {:?}", &port);
 
     let (packet_tx, packet_rx) = mpsc::channel();
     let (return_tx, return_rx) = mpsc::channel();
@@ -497,10 +499,16 @@ fn downlink_endpoint<ReadConnection: Clone, WriteConnection: Clone, Packet: Link
     // This thread receives data for downlink, buffers it and puts it in a fifo.
     // The number of buffers is limited, the thread will loop/wait for buffers to be released then
     // continue.
+    let port_c = port.clone();
     thread::Builder::new()
         .stack_size(4 * 1024)
         .spawn(move || {
-            info!("Starting UDP receiving thread for {}", &port);
+            let buf_size = port_c.buf_size.unwrap_or(8 * 1024);
+            let port = port_c.port;
+            info!(
+                "Starting UDP receiving thread for {}, buf_size: {}",
+                &port, &buf_size
+            );
             let data = data_c;
             let num_packets = num_packets_c;
             // Bind the downlink endpoint to a UDP socket.
@@ -521,7 +529,7 @@ fn downlink_endpoint<ReadConnection: Clone, WriteConnection: Clone, Packet: Link
                                 continue;
                             } else {
                                 debug!("Created new buffer for {}", &port);
-                                vec![0; 8 * 1024]
+                                vec![0; buf_size]
                             }
                         }
                     });
@@ -579,7 +587,7 @@ fn downlink_endpoint<ReadConnection: Clone, WriteConnection: Clone, Packet: Link
         // Take received message and wrap it in a Link packet.
         // Setting port to 0 because we don't know the ground port...
         // That is known by the ground comms service
-        let packet = match Packet::build(0, PayloadType::UDP, port, &buf[0..size])
+        let packet = match Packet::build(0, PayloadType::UDP, port.port, &buf[0..size])
             .and_then(|packet| packet.to_bytes())
         {
             Ok(packet) => packet,

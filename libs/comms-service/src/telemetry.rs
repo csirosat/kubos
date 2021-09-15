@@ -17,6 +17,7 @@
 //
 
 use crate::errors::*;
+use juniper::GraphQLObject;
 use std::sync::{Arc, Mutex};
 
 /// Generic telemetry collected by the communication service.

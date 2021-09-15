@@ -70,7 +70,6 @@
 //! ip = "192.168.8.2"
 //! ```
 
-#[macro_use]
 extern crate juniper;
 
 #[cfg(feature = "service")]

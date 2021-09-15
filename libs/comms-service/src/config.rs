@@ -36,7 +36,7 @@ pub struct CommsConfig {
     pub max_num_handlers: Option<u16>,
     /// Optional list of ports used by downlink endpoints that send messages to the ground.
     /// Each port in the list will be used by one downlink endpoint.
-    pub downlink_ports: Option<Vec<u16>>,
+    pub downlink_ports: Option<Vec<DownlinkPort>>,
     /// Timeout for the completion of GraphQL operations within message handlers (in milliseconds).
     /// Default: 1500
     pub read_timeout: Option<u64>,
@@ -45,6 +45,15 @@ pub struct CommsConfig {
     pub write_timeout: Option<u64>,
     /// Required. IP address on which comms service will listen.
     pub ip: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+/// Downlink port config. Optionally set buffer size.
+pub struct DownlinkPort {
+    /// Port
+    pub port: u16,
+    /// Optional: Bufer size
+    pub buf_size: Option<usize>,
 }
 
 impl CommsConfig {
