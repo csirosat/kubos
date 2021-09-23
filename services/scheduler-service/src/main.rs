@@ -51,7 +51,7 @@ fn main() -> Result<(), SchedulerError> {
         String::from(DEFAULT_SCHEDULES_DIR)
     };
 
-    let scheduler = Scheduler::new(&scheduler_dir, "")?;
+    let scheduler = Scheduler::new(&scheduler_dir)?;
 
     info!("Starting scheduler-service - {:?}", scheduler.scheduler_dir);
 

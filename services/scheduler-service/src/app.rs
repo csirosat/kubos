@@ -69,7 +69,7 @@ pub struct App {
 }
 
 impl App {
-    pub async fn execute(&self, _service_url: &str) {
+    pub async fn execute(&self) {
         info!("Start app {}", self.name);
 
         let mut cmd = Command::new(self.name.clone());

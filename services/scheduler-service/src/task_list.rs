@@ -22,17 +22,16 @@ use crate::error::SchedulerError;
 use crate::scheduler::SchedulerHandle;
 use crate::task::Task;
 use chrono::{DateTime, Utc};
+use clock_timer::RealTimer;
 use juniper::GraphQLObject;
-use log::{error, info};
+use log::info;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::channel;
-use std::sync::{Arc, Mutex};
-use std::thread;
-use tokio::runtime::Builder;
-use tokio::time::Duration;
+use std::sync::Arc;
+use tokio::runtime::Handle;
+use tokio::sync::broadcast;
 
 // Task list's contents
 #[derive(Debug, GraphQLObject, Serialize, Deserialize)]
@@ -108,43 +107,20 @@ impl TaskList {
     }
 
     // Schedules the tasks contained in this task list
-    pub fn schedule_tasks(&self, app_service_url: &str) -> Result<SchedulerHandle, SchedulerError> {
-        let (stopper, receiver) = channel::<()>();
-        let service_url = app_service_url.to_owned();
+    pub fn schedule_tasks(
+        &self,
+        real_timer: RealTimer,
+        tokio_handle: Handle,
+    ) -> Result<SchedulerHandle, SchedulerError> {
+        let (stopper, _) = broadcast::channel::<()>(1);
         let tasks: Vec<Arc<Task>> = self.tasks.iter().map(|t| Arc::new(t.to_owned())).collect();
-        let thread_handle = thread::Builder::new()
-            .stack_size(4 * 1024)
-            .spawn(move || {
-                let tasks = tasks.clone();
-                let runner = Builder::new()
-                    .thread_stack_size(8 * 1024)
-                    .threaded_scheduler()
-                    .core_threads(1)
-                    .enable_all()
-                    .build()
-                    .unwrap_or_else(|e| {
-                        error!("Failed to create timer runtime: {}", e);
-                        panic!("Failed to create timer runtime: {}", e);
-                    });
 
-                for task in tasks {
-                    info!("Scheduling task '{}'", &task.app.name);
-                    runner.spawn(task.schedule(service_url.clone()));
-                }
+        for task in tasks {
+            info!("Scheduling task '{}'", &task.app.name);
+            tokio_handle.spawn(task.schedule(real_timer.clone(), stopper.subscribe()));
+        }
 
-                // Wait on the stop message before ending the runtime
-                receiver.recv().unwrap_or_else(|e| {
-                    error!("Failed to received thread stop: {:?}", e);
-                    panic!("Failed to received thread stop: {:?}", e);
-                });
-                runner.shutdown_timeout(Duration::from_secs(2));
-            })
-            .unwrap();
-        let thread_handle = Arc::new(Mutex::new(thread_handle));
-        Ok(SchedulerHandle {
-            thread_handle,
-            stopper,
-        })
+        Ok(SchedulerHandle { stopper })
     }
 }
 
@@ -288,7 +264,11 @@ pub fn validate_task_list(path: &str) -> Result<(), SchedulerError> {
     let task_path = Path::new(path);
     let task_list = TaskList::from_path(task_path)?;
     for task in task_list.tasks {
-        let _ = task.get_duration()?;
+        let _ = match task.get_absolute() {
+            Ok(_) => Ok(()),
+            Err(SchedulerError::TaskTimeError { .. }) => Ok(()),
+            Err(e) => Err(e),
+        }?;
         let _ = task.get_period()?;
     }
     Ok(())

@@ -18,12 +18,13 @@ log = { version = "^0.4.0", default-features = false }
 serde_json = { version = "1.0", default-features = false }
 serde = { version = "1.0", features = ["derive"]}
 syslog = { version = "4.0", default-features = false }
-tokio = { version = "0.2", default-features = false, features = ["rt-core", "rt-threaded", "time", "process"] }
+tokio = { version = "0.2", default-features = false, features = ["rt-core", "rt-threaded", "time", "process", "sync", "macros"] }
 futures = { version = "*", default-features = false }
 libc = "=0.2.66"
 backtrace = "=0.3.50"
 mio = "=0.6.22"
 git-version = "0.3"
+clock-timer = "0.1.0"
 
 [dev-dependencies]
 tempfile = "3.0"

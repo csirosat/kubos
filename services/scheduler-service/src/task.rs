@@ -21,15 +21,16 @@
 use crate::app::App;
 use crate::error::SchedulerError;
 use chrono::offset::TimeZone;
+use chrono::Duration;
+use chrono::NaiveDateTime;
 use chrono::Utc;
+use clock_timer::RealTimer;
 use juniper::GraphQLObject;
 use log::error;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio::time::delay_until;
-use tokio::time::interval_at;
-use tokio::time::Duration;
-use tokio::time::Instant;
+use tokio::select;
+use tokio::sync::broadcast::Receiver;
 
 // Configuration used to schedule app execution
 #[derive(Clone, Debug, GraphQLObject, Serialize, Deserialize)]
@@ -51,7 +52,7 @@ pub struct Task {
 
 impl Task {
     // Parse timer delay duration from either delay or time fields
-    pub fn get_duration(&self) -> Result<Duration, SchedulerError> {
+    pub fn get_absolute(&self) -> Result<NaiveDateTime, SchedulerError> {
         if self.delay.is_some() && self.time.is_some() {
             return Err(SchedulerError::TaskParseError {
                 err: "Both delay and time defined".to_owned(),
@@ -59,7 +60,7 @@ impl Task {
             });
         }
         if let Some(delay) = &self.delay {
-            Ok(parse_hms_field(delay.to_owned())?)
+            Ok(parse_hms_field(delay.to_owned()).map(|d| Utc::now().naive_utc() + d)?)
         } else if let Some(time) = &self.time {
             let run_time = Utc
                 .datetime_from_str(&time, "%Y-%m-%d %H:%M:%S")
@@ -80,12 +81,7 @@ impl Task {
                     description: self.description.to_owned(),
                 })
             } else {
-                Ok((run_time - now)
-                    .to_std()
-                    .map_err(|e| SchedulerError::TaskParseError {
-                        err: format!("Failed to calculate run time: {}", e),
-                        description: self.description.to_owned(),
-                    })?)
+                Ok(run_time.naive_utc())
             }
         } else {
             Err(SchedulerError::TaskParseError {
@@ -103,9 +99,9 @@ impl Task {
         }
     }
 
-    pub async fn schedule(self: Arc<Self>, service_url: String) {
+    pub async fn schedule(self: Arc<Self>, real_timer: RealTimer, mut stop: Receiver<()>) {
         let name = self.app.name.to_owned();
-        let duration = match self.get_duration() {
+        let when = match self.get_absolute() {
             Ok(d) => d,
             Err(e) => {
                 error!(
@@ -116,21 +112,38 @@ impl Task {
             }
         };
 
-        let when = Instant::now() + duration;
         let period = self.get_period();
         let app = self.app.clone();
 
         match period {
             Ok(Some(period)) => {
-                let mut interval = interval_at(when, period);
+                let mut interval = real_timer.interval_at(when, period);
                 loop {
-                    interval.tick().await;
-                    app.execute(&service_url.clone()).await;
+                    let task = async {
+                        interval.tick().await;
+                        app.execute().await;
+                    };
+
+                    select! {
+                        _ = task => {}
+                        _ = stop.recv() => {
+                            return;
+                        }
+                    };
                 }
             }
             _ => {
-                delay_until(when).await;
-                app.execute(&service_url).await;
+                let task = async {
+                    real_timer.at(when).await;
+                    app.execute().await;
+                };
+
+                select! {
+                    _ = task => {}
+                    _ = stop.recv() => {
+                        return;
+                    }
+                };
             }
         }
     }
@@ -138,7 +151,7 @@ impl Task {
 
 fn parse_hms_field(field: String) -> Result<Duration, SchedulerError> {
     let field_parts: Vec<String> = field.split(' ').map(|s| s.to_owned()).collect();
-    let mut duration: u64 = 0;
+    let mut duration: i64 = 0;
     if field_parts.is_empty() {
         return Err(SchedulerError::HmsParseError {
             err: "No parts found".to_owned(),
@@ -151,13 +164,13 @@ fn parse_hms_field(field: String) -> Result<Duration, SchedulerError> {
         if let Ok(num) = num {
             match unit {
                 Some('s') => {
-                    duration += num;
+                    duration += num as i64;
                 }
                 Some('m') => {
-                    duration += num * 60;
+                    duration += num as i64 * 60;
                 }
                 Some('h') => {
-                    duration += num * 60 * 60;
+                    duration += num as i64 * 60 * 60;
                 }
                 _ => {
                     return Err(SchedulerError::HmsParseError {
@@ -173,7 +186,7 @@ fn parse_hms_field(field: String) -> Result<Duration, SchedulerError> {
             });
         }
     }
-    Ok(Duration::from_secs(duration))
+    Ok(Duration::seconds(duration))
 }
 
 #[cfg(test)]

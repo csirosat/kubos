@@ -23,14 +23,18 @@ use crate::mode::{
     activate_mode, create_mode, get_active_mode, get_available_modes, is_mode_active,
 };
 use crate::task_list::{get_mode_task_lists, validate_task_list, TaskList};
+use clock_timer::RealTimer;
 use log::{error, info, warn};
 use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::path::Path;
-use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
-use std::thread;
+use std::thread::{self, JoinHandle};
+use std::time::Duration;
+use tokio::runtime::{Builder, Handle};
+use tokio::sync::broadcast;
+use tokio::time::interval;
 
 #[allow(unused)]
 pub const DEFAULT_SCHEDULES_DIR: &str = "/home/system/etc/schedules";
@@ -39,27 +43,27 @@ pub const SAFE_MODE: &str = "safe";
 // Handle to primitives controlling scheduler runtime context
 #[derive(Clone)]
 pub struct SchedulerHandle {
-    // Handle to thread running scheduler runtime
-    pub thread_handle: Arc<Mutex<thread::JoinHandle<()>>>,
     // Sender for stopping scheduler runtime/thread
-    pub stopper: Sender<()>,
+    pub stopper: broadcast::Sender<()>,
 }
 
 #[derive(Clone)]
 pub struct Scheduler {
     // Path to directory where schedules/modes are stored
     pub scheduler_dir: String,
-    // URL of App Service - for start app queries
-    app_service_url: String,
     // Map of active task list names and scheduler handles. This allows us to
     // start/stop tasks associated with individual task lists
     scheduler_map: Arc<Mutex<HashMap<String, SchedulerHandle>>>,
+
+    tokio_handle: Handle,
+    thread_handle: Arc<JoinHandle<()>>,
+    real_timer: RealTimer,
 }
 
 impl Scheduler {
     // Create new Scheduler
     #[allow(unused)]
-    pub fn new(sched_dir: &str, app_service_url: &str) -> Result<Scheduler, SchedulerError> {
+    pub fn new(sched_dir: &str) -> Result<Scheduler, SchedulerError> {
         // Convert sched_dir to an absolute path
         let sched_dir_path = Path::new(sched_dir);
         let scheduler_dir = if sched_dir_path.is_relative() {
@@ -81,10 +85,43 @@ impl Scheduler {
             sched_dir.to_owned()
         };
 
+        let mut tokio = Builder::new()
+            .thread_stack_size(8 * 1024)
+            .threaded_scheduler()
+            .core_threads(1)
+            .enable_all()
+            .build()
+            .unwrap_or_else(|e| {
+                error!("Failed to create timer runtime: {}", e);
+                panic!("Failed to create timer runtime: {}", e);
+            });
+
+        let tokio_handle = tokio.handle().clone();
+
+        let thread_handle = thread::Builder::new()
+            .stack_size(4 * 1024)
+            .spawn(move || {
+                tokio.block_on(async move {
+                    let mut tick = interval(Duration::from_secs(1));
+                    loop {
+                        tick.tick().await;
+                    }
+                });
+            })
+            .map_err(|e| SchedulerError::StartError {
+                err: format!("Failed to start runtime thread: {:?}", e),
+            })?;
+
+        let thread_handle = Arc::new(thread_handle);
+
+        let real_timer = RealTimer::create();
+
         Ok(Scheduler {
             scheduler_dir,
             scheduler_map: Arc::new(Mutex::new(HashMap::<String, SchedulerHandle>::new())),
-            app_service_url: app_service_url.to_owned(),
+            tokio_handle,
+            thread_handle,
+            real_timer,
         })
     }
 
@@ -144,7 +181,8 @@ impl Scheduler {
     // Schedules tasks associated with task list
     fn start_task_list(&self, list: TaskList) -> Result<(), SchedulerError> {
         let mut schedules_map = self.scheduler_map.lock().unwrap();
-        let scheduler_handle = list.schedule_tasks(&self.app_service_url)?;
+        let scheduler_handle =
+            list.schedule_tasks(self.real_timer.clone(), self.tokio_handle.clone())?;
         schedules_map.insert(list.filename, scheduler_handle);
         Ok(())
     }
@@ -195,8 +233,8 @@ impl Scheduler {
         let mut schedules_map = self.scheduler_map.lock().unwrap();
         for (name, handle) in schedules_map.drain().take(1) {
             info!("Stopping {}'s tasks", name);
-            if let Err(e) = handle.stopper.send(()) {
-                error!("Failed to send stop to {}'s tasks: {}", name, e);
+            if let Err(_) = handle.stopper.send(()) {
+                error!("Failed to send stop to {}'s tasks", name);
             }
         }
         Ok(())
@@ -215,8 +253,8 @@ impl Scheduler {
             let mut schedules_map = self.scheduler_map.lock().unwrap();
             if let Some(handle) = schedules_map.remove(&name) {
                 info!("Stopping {}'s tasks", name);
-                if let Err(e) = handle.stopper.send(()) {
-                    error!("Failed to send stop to {}'s tasks: {}", name, e);
+                if let Err(_) = handle.stopper.send(()) {
+                    error!("Failed to send stop to {}'s tasks", name);
                 }
             }
             Ok(())
