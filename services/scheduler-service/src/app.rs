@@ -18,47 +18,14 @@
 //! Definitions and functions for dealing with scheduled app execution
 //!
 
-use crate::schema::GenericResponse;
+use flat_db::DataPoint;
 use juniper::GraphQLObject;
-use log::{error, info};
+use kubos_service::Config;
+use log::{debug, error, info};
 // use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
+use tokio::net::UdpSocket;
 use tokio::process::Command;
-
-#[derive(Debug, Deserialize)]
-pub struct StartAppResponse {
-    #[serde(rename = "startApp")]
-    pub start_app: GenericResponse,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct StartAppGraphQL {
-    pub data: StartAppResponse,
-}
-
-// // Helper function for sending query to app service
-// pub fn service_query(query: &str, hosturl: &str) -> Result<StartAppGraphQL, SchedulerError> {
-//     // The app service will wait 300ms to see if an app completes before returning its response to us
-//     let client = Client::builder()
-//         .timeout(Duration::from_millis(350))
-//         .build()
-//         .map_err(|e| SchedulerError::QueryError { err: e.to_string() })?;
-//     let mut map = HashMap::new();
-//     map.insert("query", query);
-//     let url = format!("http://{}", hosturl);
-
-//     let res = client
-//         .post(&url)
-//         .json(&map)
-//         .send()
-//         .map_err(|e| SchedulerError::QueryError { err: e.to_string() })?;
-
-//     Ok(from_str(
-//         &res.text()
-//             .map_err(|e| SchedulerError::QueryError { err: e.to_string() })?,
-//     )
-//     .map_err(|e| SchedulerError::QueryError { err: e.to_string() })?)
-// }
 
 // Configuration used for execution of an app
 #[derive(Clone, Debug, GraphQLObject, Serialize, Deserialize)]
@@ -69,8 +36,8 @@ pub struct App {
 }
 
 impl App {
-    pub async fn execute(&self) {
-        info!("Start app {}", self.name);
+    pub async fn execute(&self, id: Option<i32>) {
+        info!("Start app {:?} {}", &id, self.name);
 
         let mut cmd = Command::new(self.name.clone());
 
@@ -81,20 +48,50 @@ impl App {
 
         match cmd.status().await {
             Ok(status) => {
-                if !status.success() {
-                    let a = match status.code() {
-                        Some(a) => a,
-                        None => -1,
-                    };
-                    info!("error: App returned {}", a);
-                } else {
-                    info!("Exited healthy");
+                let code = match status.code() {
+                    Some(a) => a,
+                    None => -1,
+                };
+                info!("App {:?} returned code {}", id, code);
+                if let Some(id) = id {
+                    log_status_code_to_telemetry(id, code).await;
                 }
             }
             Err(err) => error!(
-                "Started app, but failed to fetch status information: {:?}",
-                err
+                "Started app {:?}, but failed to fetch status information: {:?}",
+                id, err
             ),
         }
+    }
+}
+
+async fn log_status_code_to_telemetry(id: i32, code: i32) {
+    let config = match Config::new("telemetry-service") {
+        Ok(c) => c,
+        Err(_) => {
+            debug!("Telemetry service config not found");
+            return;
+        }
+    };
+
+    let port = match config.get("direct_port").map(|p| p.as_integer()).flatten() {
+        Some(port) => port as u16,
+        None => {
+            debug!("Telemetry direct_port not found");
+            return;
+        }
+    };
+
+    if let Ok(mut socket) = UdpSocket::bind("0.0.0.0:0").await {
+        let dp = DataPoint::now("app-exit", &format!("{}", id), code.into());
+        if let Ok(buf) = serde_cbor::to_vec(&dp) {
+            if let Err(e) = socket.send_to(&buf, ("0.0.0.0", port)).await {
+                debug!("Couldn't send DataPoint to Telemetry service:{:?}", e);
+            }
+        } else {
+            debug!("Couldn't serialize datapoint");
+        }
+    } else {
+        debug!("Coudln't create new UDP socket");
     }
 }

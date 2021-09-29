@@ -35,8 +35,7 @@ use tokio::sync::broadcast::Receiver;
 // Configuration used to schedule app execution
 #[derive(Clone, Debug, GraphQLObject, Serialize, Deserialize)]
 pub struct Task {
-    // Description of task
-    pub description: String,
+    pub id: Option<i32>,
     // Start delay specified in Xh Ym Zs format
     // Used by init and recurring tasks
     pub delay: Option<String>,
@@ -51,12 +50,20 @@ pub struct Task {
 }
 
 impl Task {
+    fn description(&self) -> String {
+        if let Some(id) = self.id {
+            format!("{}: {}", id, self.app.name)
+        } else {
+            format!("{}", self.app.name)
+        }
+    }
+
     // Parse timer delay duration from either delay or time fields
     pub fn get_absolute(&self) -> Result<NaiveDateTime, SchedulerError> {
         if self.delay.is_some() && self.time.is_some() {
             return Err(SchedulerError::TaskParseError {
                 err: "Both delay and time defined".to_owned(),
-                description: self.description.to_owned(),
+                description: self.description(),
             });
         }
         if let Some(delay) = &self.delay {
@@ -66,19 +73,19 @@ impl Task {
                 .datetime_from_str(&time, "%Y-%m-%d %H:%M:%S")
                 .map_err(|e| SchedulerError::TaskParseError {
                     err: format!("Failed to parse time field '{}': {}", time, e),
-                    description: self.description.to_owned(),
+                    description: self.description(),
                 })?;
             let now = chrono::Utc::now();
 
             if run_time < now {
                 Err(SchedulerError::TaskTimeError {
                     err: format!("Task scheduled for past time: {}", time),
-                    description: self.description.to_owned(),
+                    description: self.app.name.to_owned(),
                 })
             } else if (run_time - now) > chrono::Duration::days(90) {
                 Err(SchedulerError::TaskTimeError {
                     err: format!("Task scheduled beyond 90 days in the future: {}", time),
-                    description: self.description.to_owned(),
+                    description: self.description(),
                 })
             } else {
                 Ok(run_time.naive_utc())
@@ -86,7 +93,7 @@ impl Task {
         } else {
             Err(SchedulerError::TaskParseError {
                 err: "No delay or time defined".to_owned(),
-                description: self.description.to_owned(),
+                description: self.description(),
             })
         }
     }
@@ -105,8 +112,8 @@ impl Task {
             Ok(d) => d,
             Err(e) => {
                 error!(
-                    "Failed to parse time specification for task '{}': {}",
-                    name, e
+                    "Failed to parse time specification for task {:?} '{}': {}",
+                    self.id, name, e
                 );
                 return;
             }
@@ -121,7 +128,7 @@ impl Task {
                 loop {
                     let task = async {
                         interval.tick().await;
-                        app.execute().await;
+                        app.execute(self.id).await;
                     };
 
                     select! {
@@ -135,7 +142,7 @@ impl Task {
             _ => {
                 let task = async {
                     real_timer.at(when).await;
-                    app.execute().await;
+                    app.execute(self.id).await;
                 };
 
                 select! {
