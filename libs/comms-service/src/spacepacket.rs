@@ -84,7 +84,7 @@ impl LinkPacket for SpacePacket {
                     match SEQUENCE_COUNT.lock() {
                         Ok(mut sc) => {
                             let ret = *sc;
-                            *sc += 1;
+                            *sc = sc.overflowing_add(1).0;
                             ret
                         }
                         Err(_) => std::u16::MAX,
