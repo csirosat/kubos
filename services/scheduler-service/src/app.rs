@@ -21,11 +21,13 @@
 use flat_db::DataPoint;
 use juniper::GraphQLObject;
 use kubos_service::Config;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 // use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 use tokio::net::UdpSocket;
 use tokio::process::Command;
+use tokio::time::delay_for;
 
 // Configuration used for execution of an app
 #[derive(Clone, Debug, GraphQLObject, Serialize, Deserialize)]
@@ -39,28 +41,54 @@ impl App {
     pub async fn execute(&self, id: Option<i32>) {
         info!("Start app {:?} {}", &id, self.name);
 
-        let mut cmd = Command::new(self.name.clone());
+        let mut retry = 3;
 
-        if let Some(args) = &self.args {
-            // let cmd_args: Vec<String> = args.iter().map(|x| format!("{}", x)).collect();
-            cmd.args(args);
-        };
+        loop {
+            if retry <= 0 {
+                warn!("Retry loop exiting for {:?}", id);
+                break;
+            }
 
-        match cmd.status().await {
-            Ok(status) => {
-                let code = match status.code() {
-                    Some(a) => a,
-                    None => -1,
-                };
-                info!("App {:?} returned code {}", id, code);
-                if let Some(id) = id {
-                    log_status_code_to_telemetry(id, code).await;
+            let mut cmd = Command::new(self.name.clone());
+
+            if let Some(args) = &self.args {
+                // let cmd_args: Vec<String> = args.iter().map(|x| format!("{}", x)).collect();
+                cmd.args(args);
+            };
+
+            match cmd.status().await {
+                Ok(status) => {
+                    let code = match status.code() {
+                        Some(a) => a,
+                        None => {
+                            // assume no status means there was an error starting the app...
+                            warn!("No status code for {:?}. Assume app failed to start", id);
+
+                            retry -= 1;
+
+                            delay_for(Duration::from_secs(1)).await;
+                            continue;
+                        }
+                    };
+                    info!("App {:?} returned code {} {:?}", id, code, status.code());
+                    if let Some(id) = id {
+                        log_status_code_to_telemetry(id, code).await;
+                    }
+
+                    break;
+                }
+                Err(err) => {
+                    error!(
+                        "Started app {:?}, but failed to fetch status information: {:?}",
+                        id, err
+                    );
+
+                    retry -= 1;
+
+                    delay_for(Duration::from_secs(1)).await;
+                    continue;
                 }
             }
-            Err(err) => error!(
-                "Started app {:?}, but failed to fetch status information: {:?}",
-                id, err
-            ),
         }
     }
 }

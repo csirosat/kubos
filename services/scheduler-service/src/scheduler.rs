@@ -24,12 +24,13 @@ use crate::mode::{
 };
 use crate::task_list::{get_mode_task_lists, validate_task_list, TaskList};
 use clock_timer::RealTimer;
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+use std::thread::park_timeout;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 use tokio::runtime::{Builder, Handle};
@@ -115,6 +116,11 @@ impl Scheduler {
         let thread_handle = Arc::new(thread_handle);
 
         let real_timer = RealTimer::create();
+
+        debug!("Parked Main Thread");
+        // park();
+        park_timeout(Duration::from_secs(5));
+        debug!("Main thread unparked");
 
         Ok(Scheduler {
             scheduler_dir,

@@ -35,7 +35,7 @@ use tokio::sync::broadcast;
 
 // Task list's contents
 #[derive(Debug, GraphQLObject, Serialize, Deserialize)]
-struct ListContents {
+pub struct ListContents {
     pub tasks: Vec<Task>,
 }
 
