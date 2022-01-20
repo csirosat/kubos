@@ -51,6 +51,11 @@ impl App {
 
             let mut cmd = Command::new(self.name.clone());
 
+            let path_var =
+                std::env::var("PATH").unwrap_or(String::from("/sbin:/usr/sbin:/bin:/usr/bin"));
+            let new_path = format!("{}:/usr/local/sbin/", path_var);
+            cmd.env("PATH", new_path);
+
             if let Some(args) = &self.args {
                 // let cmd_args: Vec<String> = args.iter().map(|x| format!("{}", x)).collect();
                 cmd.args(args);

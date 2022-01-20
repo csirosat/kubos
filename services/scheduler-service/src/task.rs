@@ -82,12 +82,14 @@ impl Task {
                     err: format!("Task scheduled for past time: {}", time),
                     description: self.app.name.to_owned(),
                 })
-            } else if (run_time - now) > chrono::Duration::days(90) {
-                Err(SchedulerError::TaskTimeError {
-                    err: format!("Task scheduled beyond 90 days in the future: {}", time),
-                    description: self.description(),
-                })
-            } else {
+            }
+            // else if (run_time - now) > chrono::Duration::days(90) {
+            //     Err(SchedulerError::TaskTimeError {
+            //         err: format!("Task scheduled beyond 90 days in the future: {}", time),
+            //         description: self.description(),
+            //     })
+            // }
+            else {
                 Ok(run_time.naive_utc())
             }
         } else {
