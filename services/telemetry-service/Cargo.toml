@@ -12,11 +12,14 @@ udp = ["kubos-service/udp"]
 juniper = { version = "0.14", default-features = false }
 kubos-service = { path = "../kubos-service" }
 flat-db = { path = "../../../../linux-m2s/projects/horus/flat-db" }
+live-telemetry-protocol = { path = "../../../../ground_tools/live_telemetry_protocol/" }
+telemetry-map = { path = "../../../../ground_tools/telemetry-map/" }
 log = "^0.4.0"
 serde = { version = "1", features = ["derive"] }
 serde_cbor = "0.11"
 chrono = "0.4"
 git-version = "0.3"
 signal-hook = { version = "=0.3.8", features = ["extended-siginfo"] }
+deku = "0.6"
 
 libc = "=0.2.66"

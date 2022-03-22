@@ -137,4 +137,3 @@ mio = { git = "https://github.com/kubos/mio", branch = "uclibc-fixes"}
 # serde = { git = "https://github.com/csirosat/serde.git" }
 serde_cbor = { git = "https://github.com/csirosat/cbor.git" }
 signal-hook = { git = "https://github.com/csirosat/signal-hook.git" }
-clock-timer = { path = "../../linux-m2s/projects/horus/clock-timer/" }

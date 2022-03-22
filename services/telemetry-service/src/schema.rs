@@ -15,7 +15,6 @@
 //
 
 use std::{
-    fs::read_dir,
     path::{Path, PathBuf},
     sync::Arc,
     thread,
@@ -70,33 +69,36 @@ impl QueryRoot {
         Ok(String::from("pong"))
     }
 
-    fn files(context: &Context) -> FieldResult<Vec<String>> {
-        let db_path = context.subsystem().db_path.to_owned();
-        let dir = db_path.parent().ok_or(FieldError::new(
-            "path does not have a parent",
-            Value::null(),
-        ))?;
+    // fn files(context: &Context) -> FieldResult<Vec<String>> {
+    //     let db_path = context.subsystem().db_path.to_owned();
+    //     let mut hash_cache_path = context.subsystem().db_path.to_owned();
+    //     hash_cache_path.set_file_name(".afs_hash_cache");
+    //     let dir = db_path.parent().ok_or(FieldError::new(
+    //         "path does not have a parent",
+    //         Value::null(),
+    //     ))?;
 
-        Ok(read_dir(&dir)
-            .map_err(|e| {
-                FieldError::new(format!("Could not read DB directory:{}", e), Value::null())
-            })?
-            .filter_map(|dirent| dirent.ok())
-            .filter_map(|dirent| match dirent.file_type() {
-                Ok(ftype) if ftype.is_file() => Some(dirent),
-                _ => None,
-            })
-            .map(|file| file.file_name())
-            .filter_map(|file_name| file_name.to_str().as_ref().map(|s| s.to_string()))
-            .map(|s| {
-                let mut dir = dir.to_path_buf();
-                dir.push(s);
-                dir
-            })
-            .filter(|f| f != &db_path)
-            .filter_map(|file_name| file_name.to_str().as_ref().map(|s| s.to_string()))
-            .collect())
-    }
+    //     Ok(read_dir(&dir)
+    //         .map_err(|e| {
+    //             FieldError::new(format!("Could not read DB directory:{}", e), Value::null())
+    //         })?
+    //         .filter_map(|dirent| dirent.ok())
+    //         .filter_map(|dirent| match dirent.file_type() {
+    //             Ok(ftype) if ftype.is_file() => Some(dirent),
+    //             _ => None,
+    //         })
+    //         .map(|file| file.file_name())
+    //         .filter_map(|file_name| file_name.to_str().as_ref().map(|s| s.to_string()))
+    //         .map(|s| {
+    //             let mut dir = dir.to_path_buf();
+    //             dir.push(s);
+    //             dir
+    //         })
+    //         .filter(|f| f != &db_path)
+    //         .filter(|f| f != &hash_cache_path)
+    //         .filter_map(|file_name| file_name.to_str().as_ref().map(|s| s.to_string()))
+    //         .collect())
+    // }
 
     fn git() -> ServiceGitHash {
         ServiceGitHash {

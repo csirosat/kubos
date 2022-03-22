@@ -70,7 +70,7 @@ impl Task {
             Ok(parse_hms_field(delay.to_owned()).map(|d| Utc::now().naive_utc() + d)?)
         } else if let Some(time) = &self.time {
             let run_time = Utc
-                .datetime_from_str(&time, "%Y-%m-%d %H:%M:%S")
+                .datetime_from_str(&time, "%Y-%m-%d %H:%M:%S%.3f")
                 .map_err(|e| SchedulerError::TaskParseError {
                     err: format!("Failed to parse time field '{}': {}", time, e),
                     description: self.description(),

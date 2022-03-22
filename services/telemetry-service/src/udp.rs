@@ -1,4 +1,3 @@
-//
 // Copyright (C) 2018 Kubos Corporation
 //
 // Licensed under the Apache License, Version 2.0 (the "License")
@@ -14,11 +13,17 @@
 // limitations under the License.
 //
 
+use chrono::{DateTime, Utc};
 pub use flat_db::DataPoint;
-use flat_db::Database;
-use log::{debug, error, info};
+use flat_db::{Database, DbError};
+use log::{debug, error, info, warn};
+use std::collections::HashMap;
+use std::convert::TryInto;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::Arc;
+
+use deku::DekuContainerRead;
+use live_telemetry_protocol::{Point, PointType, Points, TelemetryMessage};
 
 pub struct DirectUdp {
     db: Arc<Database>,
@@ -47,9 +52,9 @@ impl DirectUdp {
 
         info!("Direct UDP listening on: {}", socket.local_addr().unwrap());
 
-        loop {
+        'main_loop: loop {
             // Wait for an incoming message
-            let mut buf = [0; 4096];
+            let mut buf = vec![0; 4096];
             let (size, _peer) = socket
                 .recv_from(&mut buf)
                 .map_err(|err| format!("Failed to receive a message: {}", err))
@@ -57,15 +62,93 @@ impl DirectUdp {
 
             debug!("Received Telemetry");
 
-            if let Ok(val) = serde_cbor::from_slice::<DataPoint>(&buf[0..(size)]) {
-                self.db.insert(&[val]).unwrap();
-            } else if let Ok(vec) = serde_cbor::from_slice::<Vec<DataPoint>>(&buf[0..(size)]) {
-                self.db.insert(vec).unwrap();
+            let mut inp = (&buf[0..size], 0);
+            'tm: loop {
+                if inp.0.len() == 0 {
+                    continue 'main_loop;
+                }
+
+                let msg = match TelemetryMessage::from_bytes(inp) {
+                    Ok((next, d)) => {
+                        inp = next;
+                        d
+                    }
+                    Err(e) => {
+                        debug!("Telemetry not in Telemetry Message Format: {:?}", e);
+                        break 'tm;
+                    }
+                };
+
+                match msg {
+                    TelemetryMessage::Points(points) => match self.db.insert(points) {
+                        Ok(_) => {}
+                        Err(DbError::IOError { error }) => {
+                            error!("DB IO Error: {:?}", error);
+                            break 'main_loop;
+                        }
+                        Err(e) => {
+                            warn!("DB Insert Error: {:?}", e);
+                        }
+                    },
+                    m => {
+                        warn!("Unknown TelemetryMessage: {:?}", m);
+                    }
+                }
+            }
+
+            let dps = if let Ok(val) = serde_cbor::from_slice::<DataPoint>(&buf[0..size]) {
+                vec![val]
+            } else if let Ok(vec) = serde_cbor::from_slice::<Vec<DataPoint>>(&buf[0..size]) {
+                vec
             } else {
                 error!(
                     "Couldn't deserialize JSON object or object array from {:?}",
-                    String::from_utf8_lossy(&buf[0..(size)].to_vec())
+                    String::from_utf8_lossy(&buf[0..size].to_vec())
                 );
+                continue;
+            };
+
+            let dps: Vec<(DateTime<Utc>, u16, PointType)> = dps
+                .into_iter()
+                .filter_map(|dp| {
+                    let DataPoint(timestamp, subsystem, metric, value) = dp;
+                    telemetry_map::get_id((&subsystem, &metric)).map(|id| (timestamp, id, value))
+                })
+                .filter_map(|(ts, id, value)| value.try_into().ok().map(|value| (ts, id, value)))
+                .collect();
+
+            let mut time_bins: HashMap<DateTime<Utc>, HashMap<u16, PointType>> = HashMap::new();
+
+            for (ts, id, value) in dps {
+                let bin = time_bins.entry(ts).or_default();
+                bin.entry(id).or_insert(value);
+            }
+
+            let points_bin: Vec<Points> = time_bins
+                .drain()
+                .map(|(ts, mut bin)| {
+                    let mut points = Points::new(ts);
+
+                    points.points = bin
+                        .drain()
+                        .map(|(id, value)| Point::new_with_value(id, value))
+                        .collect();
+
+                    points
+                })
+                .collect();
+
+            for p in points_bin {
+                match self.db.insert(p) {
+                    Ok(_) => {}
+                    Err(DbError::IOError { error }) => {
+                        error!("DB IO Error: {:?}", error);
+                        break 'main_loop;
+                    }
+                    Err(e) => {
+                        warn!("DB Insert Error: {:?}", e);
+                    }
+                }
             }
         }
     }

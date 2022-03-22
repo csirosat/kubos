@@ -245,7 +245,13 @@ fn main() {
 
     let db_path = unique_db_name(db_path);
 
-    let db = Builder::new().path(&db_path).build().unwrap();
+    let db = match Builder::new().path(&db_path).build() {
+        Ok(db) => db,
+        Err(e) => {
+            error!("DB Error: {:?}. exiting", e);
+            return;
+        }
+    };
 
     let direct_udp = config.get("direct_port").map(|port| {
         let host = config
